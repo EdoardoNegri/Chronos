@@ -1,0 +1,267 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/deck_builder.gd" id="1_decks"]
+[ext_resource type="Script" path="res://scripts/ui/menu_background.gd" id="2_bg"]
+[ext_resource type="Theme" path="res://assets/themes/menu_theme.tres" id="3_theme"]
+
+[node name="Decks" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("3_theme")
+script = ExtResource("1_decks")
+
+[node name="Background" type="Control" parent="."]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_bg")
+
+[node name="Content" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 20
+
+[node name="Layout" type="VBoxContainer" parent="Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Content/Layout"]
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="Content/Layout/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "< Back"
+
+[node name="Title" type="Label" parent="Content/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
+theme_override_colors/font_shadow_color = Color(0.86, 0.7, 0.36, 0.35)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_constants/shadow_outline_size = 10
+theme_override_font_sizes/font_size = 38
+text = "DECK BUILDER"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HeaderBalance" type="Control" parent="Content/Layout/Header"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+
+[node name="Body" type="HBoxContainer" parent="Content/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 14
+
+[node name="InfoPanel" type="PanelContainer" parent="Content/Layout/Body"]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="InfoMargin" type="MarginContainer" parent="Content/Layout/Body/InfoPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="InfoColumn" type="VBoxContainer" parent="Content/Layout/Body/InfoPanel/InfoMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Preview" type="TextureRect" parent="Content/Layout/Body/InfoPanel/InfoMargin/InfoColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(222, 310)
+layout_mode = 2
+texture_filter = 5
+expand_mode = 1
+stretch_mode = 5
+
+[node name="DetailsScroll" type="ScrollContainer" parent="Content/Layout/Body/InfoPanel/InfoMargin/InfoColumn"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Details" type="RichTextLabel" parent="Content/Layout/Body/InfoPanel/InfoMargin/InfoColumn/DetailsScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+
+[node name="DeckPanel" type="PanelContainer" parent="Content/Layout/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.6
+theme_type_variation = &"Card"
+
+[node name="DeckMargin" type="MarginContainer" parent="Content/Layout/Body/DeckPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="DeckColumn" type="VBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DeckBar" type="HBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DeckOption" type="OptionButton" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text_overrun_behavior = 3
+fit_to_longest_item = false
+
+[node name="NameEdit" type="LineEdit" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Deck name"
+max_length = 40
+
+[node name="StatsRow" type="HBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="CountLabel" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+
+[node name="PointsLabel" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+
+[node name="ValidityLabel" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+text_overrun_behavior = 3
+
+[node name="DeckScroll" type="ScrollContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="DeckGrid" type="HFlowContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
+
+[node name="DeckFooter" type="HBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Status" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckFooter"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 16
+text_overrun_behavior = 3
+
+[node name="ClearButton" type="Button" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckFooter"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Clear"
+
+[node name="DeleteButton" type="Button" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckFooter"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Delete"
+
+[node name="SaveButton" type="Button" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckFooter"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Save"
+
+[node name="SearchPanel" type="PanelContainer" parent="Content/Layout/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Card"
+
+[node name="SearchMargin" type="MarginContainer" parent="Content/Layout/Body/SearchPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="SearchColumn" type="VBoxContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SearchRow" type="HBoxContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SearchEdit" type="LineEdit" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/SearchRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Search..."
+clear_button_enabled = true
+
+[node name="TypeFilter" type="OptionButton" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/SearchRow"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ResultCount" type="Label" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+
+[node name="ResultScroll" type="ScrollContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ResultGrid" type="HFlowContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/ResultScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
+
+[node name="EmptyLabel" type="Label" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3

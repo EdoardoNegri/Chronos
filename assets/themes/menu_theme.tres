@@ -178,6 +178,22 @@ corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 
+[sub_resource type="StyleBoxFlat" id="row_alt"]
+content_margin_left = 20.0
+content_margin_top = 14.0
+content_margin_right = 16.0
+content_margin_bottom = 14.0
+bg_color = Color(0.08, 0.13, 0.2, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.45, 0.78, 0.88, 0.35)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
 [resource]
 default_font_size = 18
 Button/colors/font_color = Color(0.9, 0.88, 0.82, 1)
@@ -211,3 +227,16 @@ PrimaryButton/styles/normal = SubResource("primary_normal")
 PrimaryButton/styles/pressed = SubResource("primary_pressed")
 RoomRow/base_type = &"PanelContainer"
 RoomRow/styles/panel = SubResource("row")
+RuleRow/base_type = &"PanelContainer"
+RuleRow/styles/panel = SubResource("row")
+AlternativeRuleRow/base_type = &"PanelContainer"
+AlternativeRuleRow/styles/panel = SubResource("row_alt")
+FieldLabel/base_type = &"Label"
+FieldLabel/colors/font_color = Color(0.62, 0.64, 0.74, 1)
+FieldLabel/font_sizes/font_size = 16
+TextEdit/colors/caret_color = Color(0.95, 0.8, 0.45, 1)
+TextEdit/colors/font_color = Color(0.92, 0.9, 0.85, 1)
+TextEdit/colors/selection_color = Color(0.86, 0.7, 0.36, 0.4)
+TextEdit/font_sizes/font_size = 20
+TextEdit/styles/focus = SubResource("input_focus")
+TextEdit/styles/normal = SubResource("input_normal")

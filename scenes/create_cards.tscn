@@ -1,0 +1,308 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/create_cards_menu.gd" id="1_create"]
+[ext_resource type="Script" path="res://scripts/ui/menu_background.gd" id="2_bg"]
+[ext_resource type="Theme" path="res://assets/themes/menu_theme.tres" id="3_theme"]
+
+[node name="CreateCards" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("3_theme")
+script = ExtResource("1_create")
+
+[node name="Background" type="Control" parent="."]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_bg")
+
+[node name="Content" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 64
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 64
+theme_override_constants/margin_bottom = 32
+
+[node name="Layout" type="VBoxContainer" parent="Content"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Header" type="HBoxContainer" parent="Content/Layout"]
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="Content/Layout/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+text = "< Back"
+
+[node name="Title" type="Label" parent="Content/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
+theme_override_colors/font_shadow_color = Color(0.86, 0.7, 0.36, 0.35)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_constants/shadow_outline_size = 10
+theme_override_font_sizes/font_size = 48
+text = "CREATE CARDS"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HeaderBalance" type="Control" parent="Content/Layout/Header"]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+
+[node name="Body" type="HBoxContainer" parent="Content/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 24
+
+[node name="FormPanel" type="PanelContainer" parent="Content/Layout/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.4
+theme_type_variation = &"Card"
+
+[node name="FormMargin" type="MarginContainer" parent="Content/Layout/Body/FormPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="FormScroll" type="ScrollContainer" parent="Content/Layout/Body/FormPanel/FormMargin"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Form" type="VBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="NameField" type="VBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/NameField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Name"
+
+[node name="NameEdit" type="LineEdit" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/NameField"]
+unique_name_in_owner = true
+layout_mode = 2
+max_length = 40
+
+[node name="TypeRow" type="HBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TypeField" type="VBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/TypeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/TypeRow/TypeField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Type"
+
+[node name="TypeOption" type="OptionButton" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/TypeRow/TypeField"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SubtypeField" type="VBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/TypeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/TypeRow/SubtypeField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Subtype"
+
+[node name="SubtypeEdit" type="LineEdit" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/TypeRow/SubtypeField"]
+unique_name_in_owner = true
+layout_mode = 2
+max_length = 40
+
+[node name="CostRow" type="HBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TimeField" type="VBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/CostRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/CostRow/TimeField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Time cost"
+
+[node name="TimeSpin" type="SpinBox" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/CostRow/TimeField"]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 999.0
+rounded = true
+
+[node name="PointsField" type="VBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/CostRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/CostRow/PointsField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Deck points (not printed)"
+
+[node name="PointsSpin" type="SpinBox" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/CostRow/PointsField"]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 100.0
+rounded = true
+
+[node name="StatsRow" type="HBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="AttackField" type="VBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/StatsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/StatsRow/AttackField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Attack"
+
+[node name="AttackSpin" type="SpinBox" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/StatsRow/AttackField"]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 99.0
+rounded = true
+
+[node name="DefenseField" type="VBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/StatsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/StatsRow/DefenseField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Defense"
+
+[node name="DefenseSpin" type="SpinBox" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/StatsRow/DefenseField"]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 99.0
+rounded = true
+
+[node name="TextField" type="VBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/TextField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Card text"
+
+[node name="RulesEdit" type="TextEdit" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/TextField"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+wrap_mode = 1
+
+[node name="ImageRow" type="HBoxContainer" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ChooseImageButton" type="Button" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/ImageRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Choose image..."
+
+[node name="ClearImageButton" type="Button" parent="Content/Layout/Body/FormPanel/FormMargin/FormScroll/Form/ImageRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Remove image"
+
+[node name="PreviewPanel" type="PanelContainer" parent="Content/Layout/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Card"
+
+[node name="PreviewMargin" type="MarginContainer" parent="Content/Layout/Body/PreviewPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="PreviewColumn" type="VBoxContainer" parent="Content/Layout/Body/PreviewPanel/PreviewMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Preview" type="TextureRect" parent="Content/Layout/Body/PreviewPanel/PreviewMargin/PreviewColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 300)
+layout_mode = 2
+size_flags_vertical = 3
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ShowBackCheck" type="CheckButton" parent="Content/Layout/Body/PreviewPanel/PreviewMargin/PreviewColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Show card back"
+
+[node name="Footer" type="HBoxContainer" parent="Content/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Status" type="Label" parent="Content/Layout/Footer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 16
+vertical_alignment = 1
+
+[node name="NewCardButton" type="Button" parent="Content/Layout/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "New card"
+
+[node name="SaveCardButton" type="Button" parent="Content/Layout/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Save to library"
+
+[node name="DownloadButton" type="Button" parent="Content/Layout/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Download PNG"
+
+[node name="CardViewport" type="SubViewport" parent="."]
+unique_name_in_owner = true
+transparent_bg = true
+size = Vector2i(744, 1040)
+render_target_update_mode = 4
