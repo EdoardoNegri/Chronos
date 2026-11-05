@@ -15,9 +15,12 @@ const ERROR_COLOR := Color(0.9, 0.5, 0.45)
 const SUCCESS_COLOR := Color(0.5, 0.82, 0.55)
 const INK_COLOR := Color(0.92, 0.9, 0.85)
 const NO_CARDS_TEXT := "No cards in your library yet.\nMake some in Create Cards and save them."
+const CARD_FILTERS: Array[String] = ["*.png ; Card PNG"]
+const POINTS_FILTERS: Array[String] = ["*.json ; Points list"]
 
 var card_library := CardLibrary.new()
 var deck_library := DeckLibrary.new()
+var points_list := PointsList.new()
 
 var _cards: Array[CardData] = []
 var _cards_by_id: Dictionary[String, CardData] = {}
@@ -25,8 +28,12 @@ var _textures: Dictionary[String, Texture2D] = {}
 var _deck := DeckData.new()
 var _selected_id := ""
 var _result_thumbs: Dictionary[String, CardThumb] = {}
+var _cards_dialog: FileDialog
+var _points_dialog: FileDialog
 
 @onready var _back_button: Button = %BackButton
+@onready var _import_cards_button: Button = %ImportCardsButton
+@onready var _import_points_button: Button = %ImportPointsButton
 @onready var _preview: TextureRect = %Preview
 @onready var _details: RichTextLabel = %Details
 @onready var _deck_option: OptionButton = %DeckOption
@@ -59,6 +66,12 @@ func _ready() -> void:
 	_clear_button.pressed.connect(_clear_deck)
 	_deck_scroll.set_drag_forwarding(Callable(), _can_drop_on_deck, _drop_on_deck)
 	_result_scroll.set_drag_forwarding(Callable(), _can_drop_on_results, _drop_on_results)
+	_cards_dialog = _make_dialog(FileDialog.FILE_MODE_OPEN_FILES, CARD_FILTERS)
+	_cards_dialog.files_selected.connect(_import_cards)
+	_points_dialog = _make_dialog(FileDialog.FILE_MODE_OPEN_FILE, POINTS_FILTERS)
+	_points_dialog.file_selected.connect(_import_points)
+	_import_cards_button.pressed.connect(func() -> void: _cards_dialog.popup_centered_ratio(0.7))
+	_import_points_button.pressed.connect(func() -> void: _points_dialog.popup_centered_ratio(0.7))
 
 	_type_filter.add_item(ALL_TYPES_TEXT)
 	for card_type in CardData.TYPES:
@@ -82,17 +95,59 @@ func _go_back() -> void:
 	get_tree().change_scene_to_file(MAIN_MENU_SCENE)
 
 
+func _make_dialog(mode: FileDialog.FileMode, filters: Array[String]) -> FileDialog:
+	var dialog := FileDialog.new()
+	dialog.use_native_dialog = true
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.file_mode = mode
+	dialog.filters = PackedStringArray(filters)
+	add_child(dialog)
+	return dialog
+
+
 # --- Library -------------------------------------------------------------------------------
 
 
 func _load_library() -> void:
 	_cards = card_library.load_cards(false)
+	_cards_by_id.clear()
+	_textures.clear()
 	for card in _cards:
 		_cards_by_id[card.id] = card
 		var face := card_library.load_face(card.id)
 		if face != null:
 			face.generate_mipmaps()
 			_textures[card.id] = ImageTexture.create_from_image(face)
+
+
+## Adds cards from PNGs other players sent, then shows the library again.
+func _import_cards(paths: PackedStringArray) -> void:
+	var imported := 0
+	for path in paths:
+		if card_library.import_png(path) != null:
+			imported += 1
+	_load_library()
+	_refresh_results()
+	_refresh_deck()
+	var failed := paths.size() - imported
+	if failed == 0:
+		_show_status("Imported %d %s." % [imported, "card" if imported == 1 else "cards"], SUCCESS_COLOR)
+	else:
+		_show_status(
+			(
+				"Imported %d, but %d %s not a card PNG."
+				% [imported, failed, "file is" if failed == 1 else "files are"]
+			),
+			ERROR_COLOR
+		)
+
+
+func _import_points(path: String) -> void:
+	if points_list.import_file(path) != OK:
+		_show_status("Could not read “%s” as a points list." % path.get_file(), ERROR_COLOR)
+		return
+	_refresh_deck()
+	_show_status("Loaded a points list with %d cards." % points_list.size(), SUCCESS_COLOR)
 
 
 func _make_thumb(card_id: String, source: StringName) -> CardThumb:
@@ -163,8 +218,8 @@ func _refresh_deck() -> void:
 		thumb.context_clicked.connect(_remove_card)
 		_deck_grid.add_child(thumb)
 
-	var problems := _deck.problems(_cards_by_id)
-	var used := _deck.used_points(_cards_by_id)
+	var problems := _deck.problems(_cards_by_id, points_list)
+	var used := _deck.used_points(_cards_by_id, points_list)
 	var usable := _deck.usable_points()
 	_count_label.text = "Cards: %d" % _deck.size()
 	_points_label.text = "Points: %d / %d" % [used, usable]
@@ -269,7 +324,7 @@ func _save_deck() -> void:
 		_show_status("Could not save the deck (%s)." % error_string(error), ERROR_COLOR)
 	else:
 		_refresh_deck_options(_deck.deck_name)
-		var legal := _deck.problems(_cards_by_id).is_empty()
+		var legal := _deck.problems(_cards_by_id, points_list).is_empty()
 		_show_status(
 			"Saved “%s”." % _deck.deck_name if legal else "Saved “%s”, but it is not legal yet." % _deck.deck_name,
 			SUCCESS_COLOR
@@ -312,7 +367,10 @@ func _show_details(card_id: String) -> void:
 		return
 	var text := "[font_size=22][color=#f2cc73]%s[/color][/font_size]\n" % _escape(card.card_name)
 	text += "[color=#9ea3bd]%s[/color]\n" % _escape(card.type_line())
-	text += "Time cost %d   ·   Points %d\n" % [card.time_cost, card.points]
+	var points := (
+		str(points_list.points_for(card)) if points_list.has_card(card) else "0 (not on the points list)"
+	)
+	text += "Time cost %d   ·   Points %s\n" % [card.time_cost, points]
 	if card.has_stats():
 		text += "Attack %d   ·   Defense %d\n" % [card.attack, card.defense]
 	text += "In deck: %d / %d\n\n" % [_deck.copies(card_id), DeckData.MAX_COPIES]

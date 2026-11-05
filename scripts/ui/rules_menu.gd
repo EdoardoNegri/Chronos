@@ -1,11 +1,13 @@
 extends Control
 ## Rulebook screen: shows the numbered sections and sub-rules from GameRules.
+## Ideas are not rules, so they take no number and are labeled "Idea" instead.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const GOLD := Color(0.95, 0.8, 0.45)
 const MUTED := Color(0.62, 0.64, 0.74)
 const BODY := Color(0.92, 0.9, 0.85)
 const ALT_COLOR := Color(0.45, 0.78, 0.88)
+const IDEA_COLOR := Color(0.74, 0.64, 0.95)
 const NUMBER_WIDTH := 64
 const RULE_INDENT := 24
 
@@ -34,12 +36,16 @@ func _build_section(number: int, section: Dictionary) -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	box.add_child(_make_label("%d. %s" % [number, section["title"]], 32, GOLD))
-	var rules: Array = section["rules"]
-	for i in rules.size():
-		var rule_number := "%d.%d" % [number, i + 1]
-		box.add_child(_indent(_build_rule(rule_number, rules[i], false)))
-		for alternative: Dictionary in rules[i].get("alternatives", []):
-			box.add_child(_indent(_build_rule(rule_number, alternative, true)))
+	var rule_count := 0
+	for rule: Dictionary in section["rules"]:
+		if rule.get("idea", false):
+			box.add_child(_indent(_build_rule("Idea", rule, IDEA_COLOR, &"IdeaRuleRow")))
+			continue
+		rule_count += 1
+		var rule_number := "%d.%d" % [number, rule_count]
+		box.add_child(_indent(_build_rule(rule_number, rule, GOLD, &"RuleRow")))
+		for alternative: Dictionary in rule.get("alternatives", []):
+			box.add_child(_indent(_build_rule(rule_number, alternative, ALT_COLOR, &"AlternativeRuleRow")))
 	return box
 
 
@@ -50,10 +56,9 @@ func _indent(content: Control) -> Control:
 	return indent
 
 
-func _build_rule(number: String, rule: Dictionary, is_alternative: bool) -> Control:
-	var accent := ALT_COLOR if is_alternative else GOLD
+func _build_rule(number: String, rule: Dictionary, accent: Color, row_style: StringName) -> Control:
 	var panel := PanelContainer.new()
-	panel.theme_type_variation = &"AlternativeRuleRow" if is_alternative else &"RuleRow"
+	panel.theme_type_variation = row_style
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 16)

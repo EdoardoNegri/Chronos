@@ -1,0 +1,316 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/database_menu.gd" id="1_db"]
+[ext_resource type="Script" path="res://scripts/ui/menu_background.gd" id="2_bg"]
+[ext_resource type="Theme" path="res://assets/themes/menu_theme.tres" id="3_theme"]
+[ext_resource type="Script" path="res://scripts/ui/back_arrow.gd" id="9_back"]
+[ext_resource type="Script" path="res://scripts/ui/settings_button.gd" id="11_settings"]
+
+[node name="Database" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("3_theme")
+script = ExtResource("1_db")
+
+[node name="Background" type="Control" parent="."]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_bg")
+
+[node name="Content" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 72
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 24
+
+[node name="Layout" type="VBoxContainer" parent="Content"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Content/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="HeaderSpacer" type="Control" parent="Content/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="ClearButton" type="Button" parent="Content/Layout/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Empty the form and the search bar."
+text = "Clear"
+
+[node name="SearchButton" type="Button" parent="Content/Layout/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"PrimaryButton"
+text = "Search"
+
+[node name="FormPanel" type="PanelContainer" parent="Content/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"Card"
+
+[node name="FormMargin" type="MarginContainer" parent="Content/Layout/FormPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 1
+theme_override_constants/margin_bottom = 20
+
+[node name="FormScroll" type="ScrollContainer" parent="Content/Layout/FormPanel/FormMargin"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="FormPadding" type="MarginContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_right = 23
+
+[node name="Form" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="NameField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/NameField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Name"
+
+[node name="NameEdit" type="LineEdit" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/NameField"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Any words in the name"
+
+[node name="TypeRow" type="HBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TypeField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow/TypeField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Type"
+
+[node name="TypeOption" type="OptionButton" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow/TypeField"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SubtypeField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow/SubtypeField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Subtype"
+
+[node name="SubtypeEdit" type="LineEdit" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow/SubtypeField"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "e.g. Dragon"
+
+[node name="TextField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TextField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Card text"
+
+[node name="CardTextEdit" type="LineEdit" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TextField"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Words or a phrase in the card text"
+
+[node name="NumbersRow" type="GridContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 14
+columns = 2
+
+[node name="DisplayRow" type="HBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ModeField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/DisplayRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/DisplayRow/ModeField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Show as"
+
+[node name="ModeOption" type="OptionButton" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/DisplayRow/ModeField"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SortField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/DisplayRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/DisplayRow/SortField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Sort by"
+
+[node name="SortOption" type="OptionButton" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/DisplayRow/SortField"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="OrderField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/DisplayRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/DisplayRow/OrderField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Order"
+
+[node name="OrderOption" type="OptionButton" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/DisplayRow/OrderField"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ResultsPanel" type="PanelContainer" parent="Content/Layout"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"Card"
+
+[node name="ResultsMargin" type="MarginContainer" parent="Content/Layout/ResultsPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 1
+theme_override_constants/margin_bottom = 16
+
+[node name="ResultsScroll" type="ScrollContainer" parent="Content/Layout/ResultsPanel/ResultsMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="ResultsPadding" type="MarginContainer" parent="Content/Layout/ResultsPanel/ResultsMargin/ResultsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_right = 15
+
+[node name="Results" type="VBoxContainer" parent="Content/Layout/ResultsPanel/ResultsMargin/ResultsScroll/ResultsPadding"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="EmptyLabel" type="Label" parent="Content/Layout/ResultsPanel/ResultsMargin"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="DetailPanel" type="PanelContainer" parent="Content/Layout"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"Card"
+
+[node name="DetailMargin" type="MarginContainer" parent="Content/Layout/DetailPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="DetailRow" type="HBoxContainer" parent="Content/Layout/DetailPanel/DetailMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 28
+
+[node name="DetailImage" type="TextureRect" parent="Content/Layout/DetailPanel/DetailMargin/DetailRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+texture_filter = 4
+expand_mode = 1
+stretch_mode = 5
+
+[node name="InfoScroll" type="ScrollContainer" parent="Content/Layout/DetailPanel/DetailMargin/DetailRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+horizontal_scroll_mode = 0
+
+[node name="DetailColumn" type="VBoxContainer" parent="Content/Layout/DetailPanel/DetailMargin/DetailRow/InfoScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 18
+
+[node name="DetailInfo" type="VBoxContainer" parent="Content/Layout/DetailPanel/DetailMargin/DetailRow/InfoScroll/DetailColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="DecksColumn" type="VBoxContainer" parent="Content/Layout/DetailPanel/DetailMargin/DetailRow/InfoScroll/DetailColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="BackButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+offset_left = 6.0
+offset_top = 6.0
+offset_right = 58.0
+offset_bottom = 58.0
+script = ExtResource("9_back")
+
+[node name="SettingsButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = -58.0
+offset_right = 58.0
+offset_bottom = -6.0
+grow_vertical = 0
+script = ExtResource("11_settings")

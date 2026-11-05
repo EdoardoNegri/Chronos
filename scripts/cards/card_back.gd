@@ -3,7 +3,7 @@ extends Control
 ## The back of a card during play: a blue card with a yellow hourglass in the middle and the
 ## name over it. The text is placed so the middle of its first "O" sits on the hourglass's waist.
 
-const CARD_SIZE := Vector2(744, 1040)
+const CARD_SIZE := CardView.CARD_SIZE
 const BACK_COLOR := Color(0.09, 0.2, 0.5)
 const EDGE_COLOR := Color(0.05, 0.11, 0.3)
 const YELLOW := Color(0.98, 0.82, 0.25)

@@ -54,13 +54,14 @@ func usable_points() -> int:
 	return BASE_POINTS + maxi(0, size() - MIN_SIZE) * POINTS_PER_EXTRA_CARD
 
 
-## Points spent by the deck's cards. `cards` maps card id -> CardData; unknown ids cost nothing.
-func used_points(cards: Dictionary) -> int:
+## Points spent by the deck's cards, as `points_list` prices them. `cards` maps card id ->
+## CardData; unknown ids cost nothing.
+func used_points(cards: Dictionary, points_list: PointsList) -> int:
 	var total := 0
 	for card_id in counts:
 		var card: CardData = cards.get(card_id)
 		if card != null:
-			total += card.points * counts[card_id]
+			total += points_list.points_for(card) * counts[card_id]
 	return total
 
 
@@ -73,12 +74,12 @@ func missing_ids(cards: Dictionary) -> Array[String]:
 
 
 ## What stops this deck from being legal. Empty if it is legal.
-func problems(cards: Dictionary) -> Array[String]:
+func problems(cards: Dictionary, points_list: PointsList) -> Array[String]:
 	var found: Array[String] = []
 	if size() < MIN_SIZE:
 		var short := MIN_SIZE - size()
 		found.append("Needs %d more %s" % [short, "card" if short == 1 else "cards"])
-	var over := used_points(cards) - usable_points()
+	var over := used_points(cards, points_list) - usable_points()
 	if over > 0:
 		found.append("Over the point budget by %d" % over)
 	var missing := missing_ids(cards).size()

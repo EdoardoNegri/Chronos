@@ -2,12 +2,13 @@ extends GutTest
 
 const TEST_CARDS_DIR := "user://test_cards"
 const TEST_DECKS_DIR := "user://test_decks"
+const TEST_POINTS_PATH := "user://test_points/points_list.json"
 
 
 func after_each() -> void:
 	# Let nodes queued for deletion go before the test ends.
 	await get_tree().process_frame
-	for directory in [TEST_CARDS_DIR, TEST_DECKS_DIR]:
+	for directory in [TEST_CARDS_DIR, TEST_DECKS_DIR, TEST_POINTS_PATH.get_base_dir()]:
 		if not DirAccess.dir_exists_absolute(directory):
 			continue
 		for file_name in DirAccess.get_files_at(directory):
@@ -15,11 +16,10 @@ func after_each() -> void:
 		DirAccess.remove_absolute(directory)
 
 
-func _card(card_id: String, card_name: String, points: int, time_cost := 0, type := "Creature") -> CardData:
+func _card(card_id: String, card_name: String, time_cost := 0, type := "Creature") -> CardData:
 	var card := CardData.new()
 	card.id = card_id
 	card.card_name = card_name
-	card.points = points
 	card.time_cost = time_cost
 	card.card_type = type
 	return card
@@ -52,11 +52,17 @@ func test_each_card_over_fifty_adds_a_point() -> void:
 	assert_eq(deck.usable_points(), 101, "51 cards give 101 points")
 
 
+func _points(data: Dictionary) -> PointsList:
+	var points := PointsList.new(TEST_POINTS_PATH)
+	points.set_from_dict(data)
+	return points
+
+
 func test_problems_report_size_budget_and_missing_cards() -> void:
-	var cards := {"big": _card("big", "Big", 60)}
+	var cards := {"big": _card("big", "Big")}
 	var deck := DeckData.new()
 	deck.counts = {"big": 2, "gone": 1}
-	var found := deck.problems(cards)
+	var found := deck.problems(cards, _points({"Big": 60}))
 	assert_eq(found.size(), 3)
 	assert_string_contains(found[0], "47 more cards")
 	assert_string_contains(found[1], "20")
@@ -67,19 +73,49 @@ func test_a_full_deck_within_budget_is_legal() -> void:
 	var cards := {}
 	var deck := DeckData.new()
 	for i in 50:
-		var card := _card("c%d" % i, "Card %d" % i, 2)
+		var card := _card("c%d" % i, "Card %d" % i)
 		cards[card.id] = card
 		deck.counts[card.id] = 1
-	assert_eq(deck.used_points(cards), 100)
-	assert_eq(deck.problems(cards), [] as Array[String])
+	var points := PointsList.new(TEST_POINTS_PATH)
+	assert_eq(deck.used_points(cards, points), 0, "cards not on the list cost nothing")
+	var listed := {}
+	for i in 50:
+		listed["Card %d" % i] = 2
+	points.set_from_dict(listed)
+	assert_eq(deck.used_points(cards, points), 100)
+	assert_eq(deck.problems(cards, points), [] as Array[String])
+
+
+func test_points_list_goes_by_name_and_imports_files() -> void:
+	var source := "user://test_points/source.json"
+	DirAccess.make_dir_recursive_absolute(source.get_base_dir())
+	var file := FileAccess.open(source, FileAccess.WRITE)
+	file.store_string(JSON.stringify({"Chrono Drake": 4, "Zap": 1.0, "Broken": "lots"}))
+	file.close()
+
+	var points := PointsList.new(TEST_POINTS_PATH)
+	assert_eq(points.import_file(source), OK)
+	assert_eq(points.size(), 2, "entries without a number are skipped")
+	var drake := _card("someone-elses-id", "  chrono drake ")
+	assert_true(points.has_card(drake))
+	assert_eq(points.points_for(drake), 4, "matched by name, ignoring case and spaces")
+	assert_eq(points.points_for(_card("x", "Zap")), 1)
+	assert_false(points.has_card(_card("y", "Unlisted")))
+	assert_eq(PointsList.new(TEST_POINTS_PATH).points_for(drake), 4, "the imported list is kept")
+
+	file = FileAccess.open(source, FileAccess.WRITE)
+	file.store_string("not json")
+	file.close()
+	assert_eq(points.import_file(source), ERR_PARSE_ERROR)
+	assert_eq(points.size(), 2, "a bad file leaves the list as it was")
 
 
 func test_sorted_ids_go_by_type_then_time_then_name_and_repeat_copies() -> void:
 	var cards := {
-		"spell": _card("spell", "Zap", 1, 5, "Spell"),
-		"slow": _card("slow", "Slow", 1, 30),
-		"fast_b": _card("fast_b", "Beta", 1, 10),
-		"fast_a": _card("fast_a", "Alpha", 1, 10),
+		"spell": _card("spell", "Zap", 5, "Spell"),
+		"slow": _card("slow", "Slow", 30),
+		"fast_b": _card("fast_b", "Beta", 10),
+		"fast_a": _card("fast_a", "Alpha", 10),
 	}
 	var deck := DeckData.new()
 	deck.counts = {"spell": 1, "slow": 1, "fast_b": 2, "fast_a": 1}
@@ -114,7 +150,7 @@ func test_deck_library_saves_loads_lists_and_deletes() -> void:
 
 func test_card_library_roundtrip_with_art_and_face() -> void:
 	var library := CardLibrary.new(TEST_CARDS_DIR)
-	var card := _card("", "Chrono Drake", 4, 15)
+	var card := _card("", "Chrono Drake", 15)
 	card.subtype = "Dragon"
 	card.rules_text = "Draw a card."
 	card.image = Image.create(8, 8, false, Image.FORMAT_RGB8)
@@ -126,7 +162,6 @@ func test_card_library_roundtrip_with_art_and_face() -> void:
 	assert_eq(loaded.size(), 1)
 	assert_eq(loaded[0].id, card.id)
 	assert_eq(loaded[0].card_name, "Chrono Drake")
-	assert_eq(loaded[0].points, 4)
 	assert_eq(loaded[0].time_cost, 15)
 	assert_eq(loaded[0].rules_text, "Draw a card.")
 	assert_not_null(loaded[0].image)
@@ -140,7 +175,7 @@ func test_card_library_roundtrip_with_art_and_face() -> void:
 
 func test_saving_a_card_again_updates_it() -> void:
 	var library := CardLibrary.new(TEST_CARDS_DIR)
-	var card := _card("", "First name", 1)
+	var card := _card("", "First name")
 	library.save_card(card)
 	card.card_name = "Second name"
 	library.save_card(card)
@@ -152,10 +187,11 @@ func test_saving_a_card_again_updates_it() -> void:
 func _make_scene_with_cards(count: int) -> Control:
 	var library := CardLibrary.new(TEST_CARDS_DIR)
 	for i in count:
-		library.save_card(_card("", "Card %d" % i, 2, i), Image.create(744, 1040, false, Image.FORMAT_RGBA8))
+		library.save_card(_card("", "Card %d" % i, i), Image.create(744, 1040, false, Image.FORMAT_RGBA8))
 	var scene: Control = load("res://scenes/decks.tscn").instantiate()
 	scene.card_library = library
 	scene.deck_library = DeckLibrary.new(TEST_DECKS_DIR)
+	scene.points_list = PointsList.new(TEST_POINTS_PATH)
 	add_child_autofree(scene)
 	return scene
 
@@ -221,3 +257,43 @@ func test_deck_builder_drag_and_drop_rules() -> void:
 	assert_eq(scene._deck.copies(card_id), 1)
 	scene._drop_on_results(Vector2.ZERO, {"card_id": card_id, "from": &"deck"})
 	assert_eq(scene._deck.copies(card_id), 0)
+
+
+func test_card_png_carries_the_card_and_imports() -> void:
+	var card := _card("abc123", "Chrono Drake", 15)
+	card.subtype = "Dragon"
+	card.rules_text = "Draw a card. ✓"
+	card.image = Image.create(8, 8, false, Image.FORMAT_RGB8)
+	card.image.fill(Color.RED)
+	var face := Image.create(744, 1040, false, Image.FORMAT_RGBA8)
+	var plain := face.save_png_to_buffer()
+	assert_null(CardPng.read_card(plain), "an ordinary PNG holds no card")
+
+	var png := CardPng.write_card(plain, card)
+	var still_an_image := Image.new()
+	assert_eq(still_an_image.load_png_from_buffer(png), OK, "the PNG still opens as an image")
+	assert_eq(still_an_image.get_size(), Vector2i(744, 1040))
+	var read := CardPng.read_card(png)
+	assert_eq(read.id, "abc123")
+	assert_eq(read.card_name, "Chrono Drake")
+	assert_eq(read.rules_text, "Draw a card. ✓")
+	assert_eq(read.image.get_pixel(0, 0), Color.RED)
+
+	DirAccess.make_dir_recursive_absolute(TEST_CARDS_DIR)
+	var path := TEST_CARDS_DIR.path_join("shared.png.in")
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_buffer(png)
+	file.close()
+	var library := CardLibrary.new(TEST_CARDS_DIR)
+	var imported := library.import_png(path)
+	assert_eq(imported.id, "abc123", "the card keeps its id, so imports of it match")
+	var loaded := library.load_cards()
+	assert_eq(loaded.size(), 1)
+	assert_eq(loaded[0].card_name, "Chrono Drake")
+	assert_not_null(loaded[0].image)
+	assert_eq(library.load_face("abc123").get_size(), CardLibrary.FACE_SIZE)
+
+	file = FileAccess.open(path, FileAccess.WRITE)
+	file.store_buffer(plain)
+	file.close()
+	assert_null(library.import_png(path), "a plain PNG is refused")

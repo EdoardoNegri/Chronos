@@ -1,5 +1,6 @@
 extends Control
-## Card maker: edit a card, see it live, and download it as a PNG.
+## Card maker: edit a card, see it live, and download it as a PNG. Downloaded PNGs carry the card
+## with them (see CardPng), so other players can import them.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const STATUS_COLOR := Color(0.62, 0.64, 0.74)
@@ -7,42 +8,48 @@ const ERROR_COLOR := Color(0.9, 0.5, 0.45)
 const SUCCESS_COLOR := Color(0.5, 0.82, 0.55)
 const IMAGE_FILTERS: Array[String] = ["*.png, *.jpg, *.jpeg, *.webp ; Images"]
 const PNG_FILTERS: Array[String] = ["*.png ; PNG image"]
+const CARD_FILTERS: Array[String] = ["*.png ; Card PNG"]
+## The preview never takes more than this share of the width, so the form keeps some room.
+const MAX_PREVIEW_SHARE := 0.6
+## How long a status message stays before it goes away.
+const STATUS_SECONDS := 4.0
 
 var card_library := CardLibrary.new()
 
 var _card := CardData.new()
 var _card_view := CardView.new()
-var _back_view := CardBack.new()
 var _image_dialog: FileDialog
 var _save_dialog: FileDialog
+var _import_dialog: FileDialog
+var _save_choice: AcceptDialog
+var _status_timer: Timer
 
 @onready var _back_button: Button = %BackButton
 @onready var _name_edit: LineEdit = %NameEdit
 @onready var _type_option: OptionButton = %TypeOption
 @onready var _subtype_edit: LineEdit = %SubtypeEdit
-@onready var _time_spin: SpinBox = %TimeSpin
-@onready var _points_spin: SpinBox = %PointsSpin
+@onready var _time_input: NumberStepper = %TimeInput
 @onready var _stats_row: HBoxContainer = %StatsRow
-@onready var _attack_spin: SpinBox = %AttackSpin
-@onready var _defense_spin: SpinBox = %DefenseSpin
+@onready var _stats_spacer: Control = %StatsSpacer
+@onready var _attack_input: NumberStepper = %AttackInput
+@onready var _defense_input: NumberStepper = %DefenseInput
 @onready var _rules_edit: TextEdit = %RulesEdit
 @onready var _choose_image_button: Button = %ChooseImageButton
-@onready var _clear_image_button: Button = %ClearImageButton
 @onready var _preview: TextureRect = %Preview
-@onready var _show_back_check: CheckButton = %ShowBackCheck
+@onready var _body: HBoxContainer = $Content/Layout/Body
+@onready var _left_column: VBoxContainer = $Content/Layout/Body/LeftColumn
 @onready var _status: Label = %Status
-@onready var _download_button: Button = %DownloadButton
-@onready var _new_card_button: Button = %NewCardButton
-@onready var _save_card_button: Button = %SaveCardButton
+@onready var _save_button: Button = %SaveButton
+@onready var _import_card_button: Button = %ImportCardButton
 @onready var _viewport: SubViewport = %CardViewport
 
 
 func _ready() -> void:
 	_viewport.add_child(_card_view)
-	_viewport.add_child(_back_view)
-	_back_view.hide()
 	_card_view.card = _card
 	_preview.texture = _viewport.get_texture()
+	_body.resized.connect(_fit_preview)
+	_fit_preview()
 
 	for card_type in CardData.TYPES:
 		_type_option.add_item(card_type)
@@ -51,26 +58,36 @@ func _ready() -> void:
 	_back_button.pressed.connect(_go_back)
 	_name_edit.text_changed.connect(func(text: String) -> void: _edit(&"card_name", text))
 	_subtype_edit.text_changed.connect(func(text: String) -> void: _edit(&"subtype", text))
-	_time_spin.value_changed.connect(func(value: float) -> void: _edit(&"time_cost", int(value)))
-	_points_spin.value_changed.connect(func(value: float) -> void: _edit(&"points", int(value)))
-	_attack_spin.value_changed.connect(func(value: float) -> void: _edit(&"attack", int(value)))
-	_defense_spin.value_changed.connect(func(value: float) -> void: _edit(&"defense", int(value)))
+	_time_input.value_changed.connect(func(value: float) -> void: _edit(&"time_cost", int(value)))
+	_attack_input.value_changed.connect(func(value: float) -> void: _edit(&"attack", int(value)))
+	_defense_input.value_changed.connect(func(value: float) -> void: _edit(&"defense", int(value)))
 	_rules_edit.text_changed.connect(func() -> void: _edit(&"rules_text", _rules_edit.text))
 	_type_option.item_selected.connect(_on_type_selected)
 	_choose_image_button.pressed.connect(_open_image_dialog)
-	_clear_image_button.pressed.connect(func() -> void: _edit(&"image", null))
-	_show_back_check.toggled.connect(_show_back)
-	_download_button.pressed.connect(_open_save_dialog)
-	_new_card_button.pressed.connect(_new_card)
-	_save_card_button.pressed.connect(_save_to_library)
+	_save_button.pressed.connect(_ask_how_to_save)
+	_import_card_button.pressed.connect(func() -> void: _import_dialog.popup_centered_ratio(0.7))
 
 	_image_dialog = _make_dialog(FileDialog.FILE_MODE_OPEN_FILE, IMAGE_FILTERS)
 	_image_dialog.file_selected.connect(_load_image)
 	_save_dialog = _make_dialog(FileDialog.FILE_MODE_SAVE_FILE, PNG_FILTERS)
 	_save_dialog.file_selected.connect(_save_png)
+	_import_dialog = _make_dialog(FileDialog.FILE_MODE_OPEN_FILE, CARD_FILTERS)
+	_import_dialog.file_selected.connect(_import_card)
+	_save_choice = _make_save_choice()
 
-	_show_status("Fill in the card, save it to your library, or download it as a PNG.", STATUS_COLOR)
+	_status_timer = Timer.new()
+	_status_timer.one_shot = true
+	_status_timer.timeout.connect(_status.hide)
+	add_child(_status_timer)
+
 	_name_edit.grab_focus()
+
+
+## The card view is made before the screen is shown; if the screen goes away without ever being
+## shown, the view was never added to it, so it is freed here.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and is_instance_valid(_card_view) and _card_view.get_parent() == null:
+		_card_view.free()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -93,13 +110,45 @@ func _make_dialog(mode: FileDialog.FileMode, filters: Array[String]) -> FileDial
 	return dialog
 
 
-## Starts a blank card.
-func _new_card() -> void:
-	_card = CardData.new()
+## Makes the preview as wide as a card that fills the full height, so it is as big as it can be.
+func _fit_preview() -> void:
+	var card_width := _body.size.y * CardView.CARD_SIZE.x / CardView.CARD_SIZE.y
+	var room := (
+		_body.size.x
+		- _left_column.get_combined_minimum_size().x
+		- _body.get_theme_constant("separation")
+	)
+	_preview.custom_minimum_size.x = maxf(0.0, minf(card_width, minf(room, _body.size.x * MAX_PREVIEW_SHARE)))
+
+
+## Asks whether to save the card to the library or download it as a PNG.
+func _make_save_choice() -> AcceptDialog:
+	# An AcceptDialog has no Cancel button; the window's X (or Escape) closes it.
+	var dialog := AcceptDialog.new()
+	dialog.title = "Save card"
+	dialog.dialog_text = "Save this card to your library, or download it as a PNG?"
+	dialog.ok_button_text = "Save to library"
+	dialog.add_button("Download PNG", false, "png")
+	dialog.confirmed.connect(_save_to_library)
+	dialog.custom_action.connect(
+		func(action: StringName) -> void:
+			if action == &"png":
+				dialog.hide()
+				_open_save_dialog()
+	)
+	add_child(dialog)
+	return dialog
+
+
+func _ask_how_to_save() -> void:
+	_save_choice.popup_centered()
+
+
+## Shows `card` in the editor.
+func _open_card(card: CardData) -> void:
+	_card = card
 	_card_view.card = _card
 	_sync_form()
-	_show_status("Started a new card.", STATUS_COLOR)
-	_name_edit.grab_focus()
 
 
 ## Copies the card's fields into the form controls.
@@ -107,10 +156,9 @@ func _sync_form() -> void:
 	_name_edit.text = _card.card_name
 	_subtype_edit.text = _card.subtype
 	_type_option.select(CardData.TYPES.find(_card.card_type))
-	_time_spin.value = _card.time_cost
-	_points_spin.value = _card.points
-	_attack_spin.value = _card.attack
-	_defense_spin.value = _card.defense
+	_time_input.value = _card.time_cost
+	_attack_input.value = _card.attack
+	_defense_input.value = _card.defense
 	_rules_edit.text = _card.rules_text
 	_update_stats_row()
 
@@ -121,16 +169,25 @@ func _save_to_library() -> void:
 		_show_status("Give the card a name before saving it.", ERROR_COLOR)
 		_name_edit.grab_focus()
 		return
-	# The library keeps a picture of the front, so make sure the front is what is drawn.
-	if _show_back_check.button_pressed:
-		_show_back_check.button_pressed = false
-	await _wait_for_draw()
 	await _wait_for_draw()
 	var error := card_library.save_card(_card, _capture_card())
 	if error == OK:
 		_show_status("Saved “%s” to your library." % _card.card_name.strip_edges(), SUCCESS_COLOR)
 	else:
 		_show_status("Could not save the card (%s)." % error_string(error), ERROR_COLOR)
+
+
+## Adds a card someone else made to the library and opens it.
+func _import_card(path: String) -> void:
+	var card := card_library.import_png(path)
+	if card == null:
+		_show_status(
+			"“%s” is not a card. Only PNGs made with Download PNG can be imported." % path.get_file(),
+			ERROR_COLOR
+		)
+		return
+	_open_card(card)
+	_show_status("Imported “%s” into your library." % card.card_name.strip_edges(), SUCCESS_COLOR)
 
 
 ## Sets one field on the card and redraws it.
@@ -144,14 +201,10 @@ func _on_type_selected(index: int) -> void:
 	_update_stats_row()
 
 
-## Previews, and exports, the back of the card instead of the front.
-func _show_back(show_back: bool) -> void:
-	_card_view.visible = not show_back
-	_back_view.visible = show_back
-
-
+## Without stats, an empty space keeps their place so the time cost stays the same size.
 func _update_stats_row() -> void:
 	_stats_row.visible = _card.has_stats()
+	_stats_spacer.visible = not _card.has_stats()
 
 
 func _open_image_dialog() -> void:
@@ -168,20 +221,27 @@ func _load_image(path: String) -> void:
 
 
 func _open_save_dialog() -> void:
-	var stem := "card_back" if _back_view.visible else _card.file_stem()
-	_save_dialog.current_file = "%s.png" % stem
+	_save_dialog.current_file = "%s.png" % _card.file_stem()
 	_save_dialog.popup_centered_ratio(0.7)
 
 
+## Saves the card as a PNG with the card stored inside it, so it can be imported again.
 func _save_png(path: String) -> void:
 	if path.get_extension().to_lower() != "png":
 		path += ".png"
+	# The id travels with the PNG, so every copy someone imports is the same card.
+	if _card.id.is_empty():
+		_card.id = CardLibrary.new_id()
 	await _wait_for_draw()
-	var error := _capture_card().save_png(path)
-	if error == OK:
-		_show_status("Saved %s" % path, SUCCESS_COLOR)
-	else:
+	var image := _capture_card()
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if image == null or file == null:
+		var error := FileAccess.get_open_error() if file == null else ERR_UNAVAILABLE
 		_show_status("Could not save the PNG (%s)." % error_string(error), ERROR_COLOR)
+		return
+	file.store_buffer(CardPng.write_card(image.save_png_to_buffer(), _card))
+	file.close()
+	_show_status("Saved %s" % path, SUCCESS_COLOR)
 
 
 ## Waits until the card viewport has drawn the latest edit, so reading it back is up to date.
@@ -198,6 +258,9 @@ func _capture_card() -> Image:
 	return null if DisplayServer.get_name() == "headless" else _viewport.get_texture().get_image()
 
 
+## Shows a message under the buttons for a few seconds.
 func _show_status(text: String, color: Color) -> void:
 	_status.text = text
 	_status.add_theme_color_override("font_color", color)
+	_status.show()
+	_status_timer.start(STATUS_SECONDS)

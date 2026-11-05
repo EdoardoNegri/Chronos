@@ -11,7 +11,6 @@ const DESTINATIONS := {
 	&"DatabaseButton": "res://scenes/database.tscn",
 	&"CreateCardsButton": "res://scenes/create_cards.tscn",
 	&"RulesButton": "res://scenes/rules.tscn",
-	&"SettingsButton": "res://scenes/settings.tscn",
 }
 
 var _hover_tweens: Dictionary[Button, Tween] = {}

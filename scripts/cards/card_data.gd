@@ -1,6 +1,7 @@
 class_name CardData
 extends Resource
 ## Everything printed on a card. Call emit_changed() after editing a field so views redraw.
+## What a card costs against the deck's point budget is not part of the card: see PointsList.
 
 const TYPES: Array[String] = ["Creature", "Spell"]
 ## Types that show attack and defense on the card.
@@ -12,8 +13,6 @@ var card_name := ""
 var card_type: String = TYPES[0]
 var subtype := ""
 var time_cost := 0
-## Cost against the deck's point budget (rule 1.3). Not printed on the card yet.
-var points := 0
 var attack := 0
 var defense := 0
 var rules_text := ""
@@ -27,7 +26,6 @@ func to_dict() -> Dictionary:
 		"card_type": card_type,
 		"subtype": subtype,
 		"time_cost": time_cost,
-		"points": points,
 		"attack": attack,
 		"defense": defense,
 		"rules_text": rules_text,
@@ -43,7 +41,6 @@ static func from_dict(data: Dictionary) -> CardData:
 	card.card_type = type if type in TYPES else TYPES[0]
 	card.subtype = str(data.get("subtype", ""))
 	card.time_cost = int(data.get("time_cost", 0))
-	card.points = int(data.get("points", 0))
 	card.attack = int(data.get("attack", 0))
 	card.defense = int(data.get("defense", 0))
 	card.rules_text = str(data.get("rules_text", ""))

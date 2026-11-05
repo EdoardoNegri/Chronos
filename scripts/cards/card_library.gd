@@ -5,7 +5,7 @@ extends RefCounted
 ## half size, used for thumbnails).
 
 const DEFAULT_DIRECTORY := "user://cards"
-const FACE_SIZE := Vector2i(372, 520)
+const FACE_SIZE := Vector2i(375, 525)
 
 var directory: String
 
@@ -20,7 +20,7 @@ func save_card(card: CardData, face: Image = null) -> Error:
 	if error != OK:
 		return error
 	if card.id.is_empty():
-		card.id = Crypto.new().generate_random_bytes(6).hex_encode()
+		card.id = new_id()
 
 	var file := FileAccess.open(_path(card.id, "json"), FileAccess.WRITE)
 	if file == null:
@@ -62,6 +62,26 @@ func load_cards(with_art := true) -> Array[CardData]:
 		func(a: CardData, b: CardData) -> bool: return a.card_name.naturalnocasecmp_to(b.card_name) < 0
 	)
 	return cards
+
+
+## A fresh card id.
+static func new_id() -> String:
+	return Crypto.new().generate_random_bytes(6).hex_encode()
+
+
+## Adds a card from a PNG made with "Download PNG" (see CardPng) to the library, replacing the
+## card with the same id if there is one. Returns the card, or null if the file is not a card.
+func import_png(path: String) -> CardData:
+	var bytes := FileAccess.get_file_as_bytes(path)
+	var card := CardPng.read_card(bytes)
+	if card == null:
+		return null
+	if card.id.is_empty():
+		card.id = new_id()
+	var face := Image.new()
+	if face.load_png_from_buffer(bytes) != OK:
+		face = null
+	return card if save_card(card, face) == OK else null
 
 
 ## The rendered card, or null if it was never saved with one.

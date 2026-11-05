@@ -3,6 +3,8 @@
 [ext_resource type="Script" path="res://scripts/ui/deck_builder.gd" id="1_decks"]
 [ext_resource type="Script" path="res://scripts/ui/menu_background.gd" id="2_bg"]
 [ext_resource type="Theme" path="res://assets/themes/menu_theme.tres" id="3_theme"]
+[ext_resource type="Script" path="res://scripts/ui/back_arrow.gd" id="9_back"]
+[ext_resource type="Script" path="res://scripts/ui/settings_button.gd" id="11_settings"]
 
 [node name="Decks" type="Control"]
 layout_mode = 3
@@ -31,10 +33,10 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 32
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 32
-theme_override_constants/margin_bottom = 20
+theme_override_constants/margin_left = 72
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 24
 
 [node name="Layout" type="VBoxContainer" parent="Content"]
 layout_mode = 2
@@ -43,28 +45,26 @@ theme_override_constants/separation = 12
 [node name="Header" type="HBoxContainer" parent="Content/Layout"]
 layout_mode = 2
 
-[node name="BackButton" type="Button" parent="Content/Layout/Header"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 0)
-layout_mode = 2
-text = "< Back"
-
-[node name="Title" type="Label" parent="Content/Layout/Header"]
+[node name="HeaderSpacer" type="Control" parent="Content/Layout/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
-theme_override_colors/font_shadow_color = Color(0.86, 0.7, 0.36, 0.35)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 0
-theme_override_constants/shadow_outline_size = 10
-theme_override_font_sizes/font_size = 38
-text = "DECK BUILDER"
-horizontal_alignment = 1
-vertical_alignment = 1
+mouse_filter = 2
 
-[node name="HeaderBalance" type="Control" parent="Content/Layout/Header"]
-custom_minimum_size = Vector2(120, 0)
+[node name="HeaderActions" type="HBoxContainer" parent="Content/Layout/Header"]
 layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ImportCardsButton" type="Button" parent="Content/Layout/Header/HeaderActions"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Add cards other players sent you (PNGs made with Download PNG)."
+text = "Import cards..."
+
+[node name="ImportPointsButton" type="Button" parent="Content/Layout/Header/HeaderActions"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Load the points list that sets what each card costs."
+text = "Import points list..."
 
 [node name="Body" type="HBoxContainer" parent="Content/Layout"]
 layout_mode = 2
@@ -265,3 +265,25 @@ theme_override_font_sizes/font_size = 18
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 3
+
+[node name="BackButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+offset_left = 6.0
+offset_top = 6.0
+offset_right = 58.0
+offset_bottom = 58.0
+script = ExtResource("9_back")
+
+[node name="SettingsButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = -58.0
+offset_right = 58.0
+offset_bottom = -6.0
+grow_vertical = 0
+script = ExtResource("11_settings")

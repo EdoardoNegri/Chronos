@@ -45,6 +45,7 @@ func test_create_cards_scene_edits_the_card() -> void:
 	type_option.select(CardData.TYPES.find("Spell"))
 	type_option.item_selected.emit(type_option.selected)
 	assert_false(stats_row.visible, "spells do not")
+	assert_true(scene.get_node("%StatsSpacer").visible, "their space is kept, so the time cost keeps its size")
 
 
 func test_clock_dial_prints_the_full_cost_past_a_full_turn() -> void:
@@ -70,15 +71,15 @@ func test_card_back_has_card_size_and_title_centers_first_o() -> void:
 	assert_eq(CardBack.TITLE[CardBack.FIRST_O], "O")
 
 
-func test_create_cards_scene_can_show_the_back() -> void:
+func test_create_cards_scene_has_no_back_toggle_or_points() -> void:
 	var scene: Control = load("res://scenes/create_cards.tscn").instantiate()
 	add_child_autofree(scene)
-	scene.get_node("%ShowBackCheck").toggled.emit(true)
-	assert_true(scene._back_view.visible)
-	assert_false(scene._card_view.visible)
+	assert_null(scene.get_node_or_null("%ShowBackCheck"))
+	assert_null(scene.get_node_or_null("%PointsSpin"), "the points list sets a card's points")
+	assert_false(CardData.new().to_dict().has("points"))
 
 
-func test_create_cards_scene_saves_to_library_and_starts_new_cards() -> void:
+func test_create_cards_scene_saves_to_library() -> void:
 	var directory := "user://test_maker_cards"
 	var scene: Control = load("res://scenes/create_cards.tscn").instantiate()
 	scene.card_library = CardLibrary.new(directory)
@@ -89,17 +90,84 @@ func test_create_cards_scene_saves_to_library_and_starts_new_cards() -> void:
 	var name_edit: LineEdit = scene.get_node("%NameEdit")
 	name_edit.text = "Chrono Drake"
 	name_edit.text_changed.emit(name_edit.text)
-	(scene.get_node("%TimeSpin") as SpinBox).value = 15
+	(scene.get_node("%TimeInput") as NumberStepper).value = 15
 	await scene._save_to_library()
 	var saved: Array[CardData] = scene.card_library.load_cards()
 	assert_eq(saved.size(), 1)
 	assert_eq(saved[0].time_cost, 15)
 
-	scene._new_card()
-	assert_eq(name_edit.text, "")
-	assert_eq((scene.get_node("%TimeSpin") as SpinBox).value, 0.0)
-	assert_eq(scene._card.id, "", "a new card gets its own id when saved")
+	var saved_id: String = saved[0].id
+	await scene._save_to_library()
+	assert_eq(scene.card_library.load_cards().size(), 1, "saving again updates the same card")
+	assert_eq(scene.card_library.load_cards()[0].id, saved_id)
 
 	for stored in saved:
 		scene.card_library.delete_card(stored.id)
 	DirAccess.remove_absolute(directory)
+
+
+func test_create_cards_save_button_asks_library_or_png() -> void:
+	var scene: Control = load("res://scenes/create_cards.tscn").instantiate()
+	add_child_autofree(scene)
+	assert_null(scene.get_node_or_null("%NewCardButton"))
+	assert_null(scene.get_node_or_null("%DownloadButton"))
+	var choice: AcceptDialog = scene._save_choice
+	assert_false(choice is ConfirmationDialog, "no Cancel button, only the X")
+	assert_eq(choice.ok_button_text, "Save to library")
+	(scene.get_node("%SaveButton") as Button).pressed.emit()
+	assert_true(choice.visible, "pressing Save asks how to save")
+	choice.hide()
+
+
+func test_number_stepper_steps_types_and_clamps() -> void:
+	var stepper := NumberStepper.new()
+	stepper.max_value = 99
+	add_child_autofree(stepper)
+	watch_signals(stepper)
+	var buttons: Array[Node] = stepper.find_children("*", "Button", true, false)
+	var plus: Button = buttons[0]
+	var minus: Button = buttons[1]
+	assert_eq([plus.text, minus.text], ["+", "−"], "+ is stacked over −")
+	stepper.size = Vector2(300, 53)
+	await wait_physics_frames(2)
+	assert_almost_eq(plus.size.x, plus.size.y, 1.0, "the buttons are square")
+	assert_true(minus.disabled, "cannot go below the minimum")
+	for i in 2:
+		plus.button_down.emit()
+		plus.button_up.emit()
+	assert_eq(stepper.value, 2)
+	assert_signal_emit_count(stepper, "value_changed", 2)
+	minus.button_down.emit()
+	minus.button_up.emit()
+	assert_eq(stepper.value, 1)
+
+	var edit: LineEdit = stepper.find_children("*", "LineEdit", true, false)[0]
+	edit.text = "42"
+	edit.text_changed.emit("42")
+	assert_eq(stepper.value, 42, "typing a number sets it")
+	stepper.value = 500
+	assert_eq(stepper.value, 99, "clamped to the maximum")
+	assert_eq(edit.text, "99")
+	assert_true(plus.disabled)
+	edit.text = "abc"
+	edit.text_changed.emit("abc")
+	edit.text_submitted.emit("abc")
+	assert_eq(edit.text, "99", "text that is not a number goes back to the value")
+
+
+func test_number_stepper_holding_speeds_up() -> void:
+	var stepper := NumberStepper.new()
+	add_child_autofree(stepper)
+	stepper._start_hold(1)
+	assert_eq(stepper.value, 1, "one step right away")
+	for i in NumberStepper.REPEATS_BEFORE_BIG_STEPS:
+		stepper._repeat()
+	assert_eq(stepper.value, 1 + NumberStepper.REPEATS_BEFORE_BIG_STEPS)
+	var before: int = stepper.value
+	stepper._repeat()
+	assert_eq(stepper.value, before + NumberStepper.BIG_STEP, "long holds take bigger steps")
+	assert_almost_eq(stepper._hold_timer.wait_time, NumberStepper.FASTEST_INTERVAL, 0.001, "and repeat fastest")
+	stepper._stop_hold()
+	before = stepper.value
+	stepper._repeat()
+	assert_eq(stepper.value, before, "letting go stops it")
