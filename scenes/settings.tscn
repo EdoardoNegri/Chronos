@@ -38,59 +38,26 @@ theme_override_constants/margin_bottom = 24
 
 [node name="Layout" type="VBoxContainer" parent="Content"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 18
 
-[node name="OptionsPanel" type="PanelContainer" parent="Content/Layout"]
+[node name="SettingsScroll" type="ScrollContainer" parent="Content/Layout"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
-theme_type_variation = &"Card"
+horizontal_scroll_mode = 0
 
-[node name="OptionsMargin" type="MarginContainer" parent="Content/Layout/OptionsPanel"]
+[node name="SettingsPadding" type="MarginContainer" parent="Content/Layout/SettingsScroll"]
 layout_mode = 2
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 20
+size_flags_horizontal = 3
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
 
-[node name="Options" type="VBoxContainer" parent="Content/Layout/OptionsPanel/OptionsMargin"]
-layout_mode = 2
-theme_override_constants/separation = 14
-
-[node name="DisplayLabel" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
-layout_mode = 2
-theme_type_variation = &"FieldLabel"
-text = "Display"
-
-[node name="FullscreenCheck" type="CheckButton" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
+[node name="SettingList" type="VBoxContainer" parent="Content/Layout/SettingsScroll/SettingsPadding"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 0
-text = "Fullscreen"
-
-[node name="OnlineLabel" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
-layout_mode = 2
-theme_type_variation = &"FieldLabel"
-text = "Online"
-
-[node name="NameHint" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
-theme_override_font_sizes/font_size = 16
-text = "Your name, shown to the players you meet online. No email needed."
-
-[node name="NameEdit" type="LineEdit" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(360, 0)
-layout_mode = 2
-size_flags_horizontal = 0
-placeholder_text = "Not set yet: you pick one when you go online"
-max_length = 20
-
-[node name="NameStatus" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
+size_flags_horizontal = 3
+theme_override_constants/separation = 32
 
 [node name="BackButton" type="Button" parent="."]
 unique_name_in_owner = true

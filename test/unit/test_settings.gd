@@ -112,3 +112,36 @@ func test_settings_has_no_server_or_link_options() -> void:
 	var settings := _open_settings("Aeon")
 	assert_null(settings.get_node_or_null("%ServerEdit"), "rooms are listed without a server to set")
 	assert_null(settings.get_node_or_null("%LinksCheck"), "and joined from the list, not with links")
+
+
+func _texts(settings: Control) -> Array[String]:
+	var texts: Array[String] = []
+	for label: Label in settings.get_node("%SettingList").find_children("*", "Label", true, false):
+		texts.append(label.text)
+	return texts
+
+
+func test_each_section_is_one_box_with_a_row_per_setting() -> void:
+	var settings := _open_settings("Aeon")
+	var texts := _texts(settings)
+	for title in ["Display", "Fullscreen", "Online", "Name"]:
+		assert_has(texts, title)
+	for text in texts:
+		assert_false(text.left(1).is_valid_int(), "no numbers in the titles: %s" % text)
+	assert_null(settings.get_node_or_null("%SearchEdit"), "no search bar for a handful of settings")
+
+	var check: Control = settings.get_node("%FullscreenCheck")
+	var row: HBoxContainer = check.get_parent()
+	var words: Array[Node] = row.get_child(0).get_children()
+	assert_eq((words[0] as Label).text, "Fullscreen", "the setting's name on the left")
+	assert_string_contains((words[1] as Label).text, "whole screen", "with what it does under it")
+	assert_eq(row.get_child(1), check, "and its control on the right")
+	assert_true(row.get_parent() is VBoxContainer, "rows sit straight in the section's box, not in a box of their own")
+	var name_row: Node = (settings.get_node("%NameEdit") as Node).get_parent().get_parent()
+	assert_true(name_row is HBoxContainer, "the name field is on the right of its row too")
+
+
+func test_back_closes_settings() -> void:
+	var settings := _open_settings("Aeon")
+	(settings.get_node("%BackButton") as Button).pressed.emit()
+	assert_true(settings.is_queued_for_deletion())

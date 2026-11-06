@@ -370,6 +370,9 @@ func _close_overlay(overlay: Control) -> void:
 	_search_edit.grab_focus()
 
 
+## Says something under the room list. The line only takes space while it says something, so the
+## list reaches the bottom of the screen otherwise.
 func _show_status(text: String, color: Color) -> void:
 	_status.text = text
+	_status.visible = not text.is_empty()
 	_status.add_theme_color_override("font_color", color)

@@ -39,7 +39,7 @@ grow_vertical = 2
 theme_override_constants/margin_left = 72
 theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 40
-theme_override_constants/margin_bottom = 24
+theme_override_constants/margin_bottom = 8
 
 [node name="Layout" type="VBoxContainer" parent="Content"]
 layout_mode = 2
@@ -102,6 +102,7 @@ vertical_alignment = 1
 
 [node name="Status" type="Label" parent="Content/Layout"]
 unique_name_in_owner = true
+visible = false
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)

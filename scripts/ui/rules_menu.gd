@@ -1,6 +1,7 @@
 extends Control
 ## Rulebook screen: shows the numbered sections and sub-rules from GameRules, each section in its
-## own box. Ideas are not rules, so they take no number and are labeled "Idea" instead.
+## own box (see NumberedSections, which the settings share). Ideas are not rules, so they take no
+## number and are labeled "Idea" instead.
 ##
 ## The search bar filters the rulebook in place: a sub-rule stays only if its number, title or
 ## text contains every word searched for (ignoring case), and a section with none left is hidden.
@@ -12,15 +13,12 @@ extends Control
 ## The back arrow (or Escape) clears the search first, then goes to the main menu.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
-const GOLD := Color(0.95, 0.8, 0.45)
-const MUTED := Color(0.62, 0.64, 0.74)
-const BODY := Color(0.92, 0.9, 0.85)
+const GOLD := NumberedSections.GOLD
 const ALT_COLOR := Color(0.45, 0.78, 0.88)
 const IDEA_COLOR := Color(0.74, 0.64, 0.95)
-const SECTION_PADDING := 20
 
-## The rulebook as built, for the search. Each section: "number", "title", "control" and "rules";
-## each rule: "number" ("2.4" or "Idea"), "title", "text", "control" and "body" (its text label).
+## The rulebook as built, for the search (see NumberedSections). Each rule also keeps its "text"
+## and "body" (its text label, where the searched words are shown).
 var _sections: Array[Dictionary] = []
 
 @onready var _back_button: Button = %BackButton
@@ -60,63 +58,27 @@ func _go_back() -> void:
 
 ## A section as "2. Title" with its own box underneath holding its sub-rules.
 func _build_section(number: int, section: Dictionary) -> Control:
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
-	column.add_child(_make_label("%d. %s" % [number, section["title"]], 32, GOLD))
-	var entry := {
-		"number": str(number), "title": section["title"], "control": column, "rules": [],
-	}
+	var entry := NumberedSections.make_section(number, section["title"], _plain("%d %s" % [number, section["title"]]))
 	_sections.append(entry)
-
-	var panel := PanelContainer.new()
-	panel.theme_type_variation = &"Card"
-	column.add_child(panel)
-	var margin := MarginContainer.new()
-	for side in ["left", "top", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, SECTION_PADDING)
-	panel.add_child(margin)
-	var rules := VBoxContainer.new()
-	rules.add_theme_constant_override("separation", 16)
-	margin.add_child(rules)
-
 	var rule_count := 0
 	for rule: Dictionary in section["rules"]:
 		if rule.get("idea", false):
-			rules.add_child(_add_rule(entry, "Idea", rule, IDEA_COLOR, &"IdeaRuleRow"))
+			_add_rule(entry, "Idea", rule, IDEA_COLOR, &"IdeaRuleRow")
 			continue
 		rule_count += 1
 		var rule_number := "%d.%d" % [number, rule_count]
-		rules.add_child(_add_rule(entry, rule_number, rule, GOLD, &"RuleRow"))
+		_add_rule(entry, rule_number, rule, GOLD, &"RuleRow")
 		for alternative: Dictionary in rule.get("alternatives", []):
-			rules.add_child(_add_rule(entry, rule_number, alternative, ALT_COLOR, &"AlternativeRuleRow"))
-	return column
+			_add_rule(entry, rule_number, alternative, ALT_COLOR, &"AlternativeRuleRow")
+	return entry["control"]
 
 
-## A rule as "1.2. Title" (or "Idea: Title") with its text in a box underneath, remembered in its
-## section for the search.
-func _add_rule(
-	section: Dictionary, number: String, rule: Dictionary, accent: Color, row_style: StringName
-) -> Control:
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 6)
-
-	var heading := HBoxContainer.new()
-	heading.add_theme_constant_override("separation", 10)
-	heading.add_child(_make_label(number + (":" if number == "Idea" else "."), 22, accent))
-	heading.add_child(_make_label(rule["title"], 22, accent))
-	column.add_child(heading)
-
-	var panel := PanelContainer.new()
-	panel.theme_type_variation = row_style
-	var body := _make_body(20, BODY)
-	panel.add_child(body)
-	column.add_child(panel)
-
-	(section["rules"] as Array).append({
-		"number": number, "title": rule["title"], "text": rule["text"], "control": column,
-		"body": body,
-	})
-	return column
+## A rule as "1.2. Title" (or "Idea: Title") with its text in a box underneath.
+func _add_rule(section: Dictionary, number: String, rule: Dictionary, accent: Color, row_style: StringName) -> void:
+	var body := NumberedSections.make_body()
+	var item := NumberedSections.add_item(section, number, rule["title"], body, _plain(rule["text"]), accent, row_style)
+	item["text"] = rule["text"]
+	item["body"] = body
 
 
 # --- Search --------------------------------------------------------------------------------
@@ -125,42 +87,19 @@ func _add_rule(
 ## The sections and sub-rules whose own number, title or text contain every word of the query,
 ## in reading order. Empty for an empty query.
 func search(query: String) -> Array[Dictionary]:
-	var terms := _words(query)
-	var found: Array[Dictionary] = []
-	if terms.is_empty():
-		return found
-	for section in _sections:
-		if _matches(section, terms):
-			found.append(section)
-		for rule: Dictionary in section["rules"]:
-			if _matches(rule, terms):
-				found.append(rule)
-	return found
+	return NumberedSections.search(_sections, _words(query))
 
 
 ## Shows only what the search bar matches (everything when it is empty), from the top.
 func _apply_search() -> void:
 	var terms := _words(_search_edit.text)
-	var anything_shown := false
+	var anything_shown := NumberedSections.filter(_sections, terms)
 	for section in _sections:
-		var keep_all := terms.is_empty() or _matches(section, terms)
-		var shown := 0
-		for rule: Dictionary in section["rules"]:
-			var keep := keep_all or _matches(rule, terms)
-			(rule["control"] as Control).visible = keep
+		for rule: Dictionary in section["items"]:
 			(rule["body"] as RichTextLabel).text = _rule_bbcode(rule["text"], terms)
-			if keep:
-				shown += 1
-		(section["control"] as Control).visible = shown > 0
-		anything_shown = anything_shown or shown > 0
 	_rules_scroll.visible = anything_shown
 	_no_results_label.visible = not anything_shown
 	_rules_scroll.scroll_vertical = 0
-
-
-func _matches(entry: Dictionary, terms: PackedStringArray) -> bool:
-	var haystack := _plain("%s %s %s" % [entry["number"], entry["title"], entry.get("text", "")])
-	return SearchText.contains_all(haystack, terms)
 
 
 ## What a search looks for, as every search field reads it (see SearchText).
@@ -220,26 +159,3 @@ func _rule_bbcode(text: String, terms: PackedStringArray) -> String:
 	if was_draft:
 		out += "[/color]"
 	return out
-
-
-# --- Helpers -------------------------------------------------------------------------------
-
-
-func _make_label(text: String, font_size: int, color: Color) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
-	return label
-
-
-func _make_body(font_size: int, color: Color) -> RichTextLabel:
-	var label := RichTextLabel.new()
-	label.bbcode_enabled = true
-	label.fit_content = true
-	label.scroll_active = false
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.add_theme_font_size_override("normal_font_size", font_size)
-	label.add_theme_color_override("default_color", color)
-	return label
