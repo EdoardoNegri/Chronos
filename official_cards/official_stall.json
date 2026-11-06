@@ -1,0 +1,11 @@
+{
+	"attack": 0,
+	"card_name": "Stall",
+	"card_type": "Spell",
+	"defense": 0,
+	"id": "official_stall",
+	"points": 1,
+	"rules_text": "Your opponent's next card costs 5 more time.",
+	"subtype": "",
+	"time_cost": 10
+}

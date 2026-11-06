@@ -1,0 +1,11 @@
+{
+	"attack": 2,
+	"card_name": "Dust Wraith",
+	"card_type": "Creature",
+	"defense": 2,
+	"id": "official_dust_wraith",
+	"points": 1,
+	"rules_text": "Cannot be blocked by creatures with time cost 30 or more.",
+	"subtype": "Spirit",
+	"time_cost": 15
+}

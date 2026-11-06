@@ -17,12 +17,17 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-Rooms="*res://scripts/net/room_directory.gd"
+Profile="*res://scripts/net/player_profile.gd"
+Online="*res://scripts/net/lobby.gd"
 
 [display]
 
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/dev_terminals/plugin.cfg")
 
 [physics]
 

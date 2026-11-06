@@ -1,0 +1,102 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/card_search_form.gd" id="1_form"]
+
+[node name="CardSearchForm" type="VBoxContainer"]
+theme_override_constants/separation = 14
+script = ExtResource("1_form")
+
+[node name="TopRow" type="BoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="NameField" type="VBoxContainer" parent="TopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="TopRow/NameField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Name"
+
+[node name="NameEdit" type="LineEdit" parent="TopRow/NameField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Every word must be in the name. Put text in quotes to match it exactly, spaces included."
+placeholder_text = "Words in the name, or \"exact text\""
+
+[node name="SourceField" type="VBoxContainer" parent="TopRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="TopRow/SourceField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Cards"
+
+[node name="CardSourceOption" type="OptionButton" parent="TopRow/SourceField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Search the official cards, your custom cards (the ones you created or imported), or both."
+
+[node name="TypeRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TypeField" type="VBoxContainer" parent="TypeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="TypeRow/TypeField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Type"
+
+[node name="TypeEdit" type="LineEdit" parent="TypeRow/TypeField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Several words find cards with any of them. In quotes (\"creature spell\") they must all match."
+placeholder_text = "e.g. Creature"
+
+[node name="SubtypeField" type="VBoxContainer" parent="TypeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="TypeRow/SubtypeField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Subtype"
+
+[node name="SubtypeEdit" type="LineEdit" parent="TypeRow/SubtypeField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Several words find cards with any of them (warrior elf: all warriors and all elves). In quotes (\"warrior elf\") they must all match: cards that are both."
+placeholder_text = "e.g. Warrior Elf"
+
+[node name="TextField" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="TextField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Card text"
+
+[node name="CardTextEdit" type="LineEdit" parent="TextField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Every word must be in the card text. Put text in quotes to match it exactly, spaces included."
+placeholder_text = "Words in the card text, or \"an exact phrase\""
+
+[node name="NumbersRow" type="GridContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 14
+columns = 2

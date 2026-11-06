@@ -1,0 +1,11 @@
+{
+	"attack": 5,
+	"card_name": "Clockwork Golem",
+	"card_type": "Creature",
+	"defense": 6,
+	"id": "official_clockwork_golem",
+	"points": 3,
+	"rules_text": "Cannot be targeted by spells.",
+	"subtype": "Construct",
+	"time_cost": 45
+}

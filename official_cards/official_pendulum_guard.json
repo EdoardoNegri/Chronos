@@ -1,0 +1,11 @@
+{
+	"attack": 2,
+	"card_name": "Pendulum Guard",
+	"card_type": "Creature",
+	"defense": 5,
+	"id": "official_pendulum_guard",
+	"points": 2,
+	"rules_text": "Creatures that attack this one lose 1 attack until the end of the turn.",
+	"subtype": "Warrior",
+	"time_cost": 25
+}

@@ -1,0 +1,191 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/room_menu.gd" id="1_room"]
+[ext_resource type="Script" path="res://scripts/ui/menu_background.gd" id="2_bg"]
+[ext_resource type="Theme" path="res://assets/themes/menu_theme.tres" id="3_theme"]
+[ext_resource type="Script" path="res://scripts/ui/back_arrow.gd" id="9_back"]
+[ext_resource type="Script" path="res://scripts/ui/settings_button.gd" id="11_settings"]
+
+[node name="Room" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("3_theme")
+script = ExtResource("1_room")
+
+[node name="Background" type="Control" parent="."]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_bg")
+
+[node name="Content" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 72
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 24
+
+[node name="Layout" type="VBoxContainer" parent="Content"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="HeaderPanel" type="PanelContainer" parent="Content/Layout"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="HeaderMargin" type="MarginContainer" parent="Content/Layout/HeaderPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 14
+
+[node name="HeaderColumn" type="VBoxContainer" parent="Content/Layout/HeaderPanel/HeaderMargin"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="TitleLabel" type="Label" parent="Content/Layout/HeaderPanel/HeaderMargin/HeaderColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
+theme_override_font_sizes/font_size = 32
+text = "Room"
+text_overrun_behavior = 3
+
+[node name="InfoLabel" type="Label" parent="Content/Layout/HeaderPanel/HeaderMargin/HeaderColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 16
+text = "Hosted by"
+
+[node name="PlayersRow" type="HBoxContainer" parent="Content/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="YouPanel" type="PanelContainer" parent="Content/Layout/PlayersRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Card"
+
+[node name="YouMargin" type="MarginContainer" parent="Content/Layout/PlayersRow/YouPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 12
+
+[node name="YouLabel" type="Label" parent="Content/Layout/PlayersRow/YouPanel/YouMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "You"
+text_overrun_behavior = 3
+
+[node name="OpponentPanel" type="PanelContainer" parent="Content/Layout/PlayersRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Card"
+
+[node name="OpponentMargin" type="MarginContainer" parent="Content/Layout/PlayersRow/OpponentPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 12
+
+[node name="OpponentLabel" type="Label" parent="Content/Layout/PlayersRow/OpponentPanel/OpponentMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Waiting for another player…"
+text_overrun_behavior = 3
+
+[node name="ChatPanel" type="PanelContainer" parent="Content/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"Card"
+
+[node name="ChatMargin" type="MarginContainer" parent="Content/Layout/ChatPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="ChatColumn" type="VBoxContainer" parent="Content/Layout/ChatPanel/ChatMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ChatLog" type="RichTextLabel" parent="Content/Layout/ChatPanel/ChatMargin/ChatColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/normal_font_size = 18
+bbcode_enabled = true
+scroll_following = true
+
+[node name="ChatRow" type="HBoxContainer" parent="Content/Layout/ChatPanel/ChatMargin/ChatColumn"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ChatEdit" type="LineEdit" parent="Content/Layout/ChatPanel/ChatMargin/ChatColumn/ChatRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Say something to the other player"
+max_length = 200
+
+[node name="SendButton" type="Button" parent="Content/Layout/ChatPanel/ChatMargin/ChatColumn/ChatRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Send"
+
+[node name="Footer" type="HBoxContainer" parent="Content/Layout"]
+layout_mode = 2
+
+[node name="FooterSpacer" type="Control" parent="Content/Layout/Footer"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="LeaveButton" type="Button" parent="Content/Layout/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Leave room"
+
+[node name="BackButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+offset_left = 6.0
+offset_top = 6.0
+offset_right = 58.0
+offset_bottom = 58.0
+script = ExtResource("9_back")
+
+[node name="SettingsButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = -58.0
+offset_right = 58.0
+offset_bottom = -6.0
+grow_vertical = 0
+script = ExtResource("11_settings")

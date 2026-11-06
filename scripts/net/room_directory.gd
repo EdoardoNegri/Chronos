@@ -1,87 +1,155 @@
 class_name RoomDirectory
-extends Node
-## Source of truth for the online room list, registered as the `Rooms` autoload.
+extends RefCounted
+## A list of rooms and the rules for them: names, two players to a game, passwords, who can join.
 ##
-## This is a local stand-in with fake rooms. The UI only talks to the signals and methods
-## below, so a real backend can replace the bodies of refresh/host_room/join_room without
-## touching any screen.
+## The lobby server keeps the real list in one of these (see LobbyState), and each player's game
+## keeps the last list the server sent in another, to show in the room browser.
 
 signal rooms_changed
 
-const MIN_PLAYERS := 2
-const MAX_PLAYERS := 8
+## A game is always between two players.
+const PLAYERS := 2
 const MAX_NAME_LENGTH := 32
+const MAX_PASSWORD_LENGTH := 32
 
+## The name given to rooms hosted without a host name.
 var player_name := "Player"
 
 var _rooms: Array[RoomInfo] = []
 var _next_id := 1
 
 
-func _init() -> void:
-	_seed_fake_rooms()
+## A directory with a few example rooms in it, for trying things out and for tests.
+static func with_examples() -> RoomDirectory:
+	var directory := RoomDirectory.new()
+	directory._seed_example_rooms()
+	return directory
 
 
-## Rooms whose name or host contains `query` (case-insensitive), sorted by name.
-func get_rooms(query := "") -> Array[RoomInfo]:
-	var needle := query.strip_edges().to_lower()
+## Rooms whose name and host together hold every word of `query`, read like every search field
+## reads it (see SearchText), sorted by name. With `only_open`, rooms that cannot be joined (full,
+## or already in a game) are left out.
+func get_rooms(query := "", only_open := false) -> Array[RoomInfo]:
+	var wanted := SearchText.words(query)
 	var result: Array[RoomInfo] = []
 	for room in _rooms:
-		if (
-			needle.is_empty()
-			or room.room_name.to_lower().contains(needle)
-			or room.host_name.to_lower().contains(needle)
-		):
+		if only_open and not room.is_joinable():
+			continue
+		var haystack := ("%s %s" % [room.room_name, room.host_name]).to_lower()
+		if SearchText.contains_all(haystack, wanted):
 			result.append(room)
 	result.sort_custom(_by_name)
 	return result
 
 
-func get_room_count() -> int:
-	return _rooms.size()
+## How many rooms there are, or with `only_open` how many of them can be joined.
+func get_room_count(only_open := false) -> int:
+	if not only_open:
+		return _rooms.size()
+	return _rooms.filter(func(room: RoomInfo) -> bool: return room.is_joinable()).size()
 
 
-## Re-fetches the list from the backend and emits `rooms_changed` when done.
-func refresh() -> void:
+## The room with this id, or null.
+func get_room(room_id: StringName) -> RoomInfo:
+	for room in _rooms:
+		if room.id == room_id:
+			return room
+	return null
+
+
+## The rooms that can be joined, as they are sent to players (see RoomInfo.to_dict).
+func open_snapshot() -> Array[Dictionary]:
+	var snapshot: Array[Dictionary] = []
+	for room in get_rooms("", true):
+		snapshot.append(room.to_dict())
+	return snapshot
+
+
+## Replaces every room with the ones in a snapshot the server sent.
+func replace_from_snapshot(snapshot: Array) -> void:
+	_rooms.clear()
+	for entry: Variant in snapshot:
+		if entry is Dictionary:
+			_rooms.append(RoomInfo.from_dict(entry))
 	rooms_changed.emit()
 
 
-## Returns an error message, or an empty string if `room_name` can be used for a new room.
-func validate_room_name(room_name: String) -> String:
+## Returns an error message, or an empty string if `room_name` could be a room's name.
+static func check_room_name(room_name: String) -> String:
 	var trimmed := room_name.strip_edges()
 	if trimmed.is_empty():
 		return "Give your room a name."
 	if trimmed.length() > MAX_NAME_LENGTH:
 		return "Room names can be at most %d characters." % MAX_NAME_LENGTH
+	return ""
+
+
+## Returns an error message, or an empty string if `room_name` can be used for a new room.
+func validate_room_name(room_name: String) -> String:
+	var error := check_room_name(room_name)
+	if not error.is_empty():
+		return error
 	for room in _rooms:
-		if room.room_name.to_lower() == trimmed.to_lower():
+		if room.room_name.to_lower() == room_name.strip_edges().to_lower():
 			return "A room with that name already exists."
 	return ""
 
 
-## Creates a room hosted by the local player. Returns null if the name or size is invalid.
-func host_room(room_name: String, max_players: int) -> RoomInfo:
+## Creates a room for two players hosted by `host_name` (or `player_name`). `custom_cards` lets its
+## games use custom cards too (see RoomInfo), and a `password` (empty for none) is asked of whoever
+## joins. Returns null if the name or the password is not allowed.
+func host_room(
+	room_name: String, custom_cards := false, password := "", host_name := ""
+) -> RoomInfo:
 	if not validate_room_name(room_name).is_empty():
 		return null
-	if max_players < MIN_PLAYERS or max_players > MAX_PLAYERS:
+	if password.length() > MAX_PASSWORD_LENGTH:
 		return null
-	var room := RoomInfo.new(_make_id(), room_name.strip_edges(), player_name, 1, max_players)
+	var room := RoomInfo.new(
+		_make_id(),
+		room_name.strip_edges(),
+		host_name if not host_name.is_empty() else player_name,
+		1,
+		PLAYERS,
+		false,
+		custom_cards,
+		password
+	)
 	_rooms.append(room)
 	rooms_changed.emit()
 	return room
 
 
-## Joins a room as the local player. Returns OK, ERR_DOES_NOT_EXIST or ERR_BUSY.
-func join_room(room_id: StringName) -> Error:
-	for room in _rooms:
-		if room.id != room_id:
-			continue
-		if not room.is_joinable():
-			return ERR_BUSY
-		room.players += 1
+## Seats a player in a room, giving the password if the room has one. Returns OK,
+## ERR_DOES_NOT_EXIST, ERR_BUSY (full, or already in a game) or ERR_UNAUTHORIZED (the room has a
+## password and this is not it).
+func join_room(room_id: StringName, password := "") -> Error:
+	var room := get_room(room_id)
+	if room == null:
+		return ERR_DOES_NOT_EXIST
+	if not room.is_joinable():
+		return ERR_BUSY
+	if not room.accepts(password):
+		return ERR_UNAUTHORIZED
+	room.players += 1
+	rooms_changed.emit()
+	return OK
+
+
+## Frees the second seat of a room, so someone else can take it.
+func leave_room(room_id: StringName) -> void:
+	var room := get_room(room_id)
+	if room != null and room.players > 1:
+		room.players -= 1
 		rooms_changed.emit()
-		return OK
-	return ERR_DOES_NOT_EXIST
+
+
+## Takes a room off the list (its host left).
+func remove_room(room_id: StringName) -> void:
+	var room := get_room(room_id)
+	if room != null:
+		_rooms.erase(room)
+		rooms_changed.emit()
 
 
 func _by_name(a: RoomInfo, b: RoomInfo) -> bool:
@@ -93,16 +161,22 @@ func _make_id() -> StringName:
 	return StringName("room_%d" % _next_id)
 
 
-func _seed_fake_rooms() -> void:
+func _seed_example_rooms() -> void:
+	# Name, host, players in it, in a game, custom cards, password. The rooms with a password in
+	# this list all use "time".
 	var seeds := [
-		["Temporal Rift", "Aeon", 1, 2, false],
-		["Midnight Duel", "Kairos", 2, 2, true],
-		["Casual Hourglass", "Sandy", 1, 4, false],
-		["Beginners Welcome", "Tempus", 3, 4, false],
-		["Ranked Clash", "Vesper", 2, 2, false],
-		["Paradox Lounge", "Lyra", 1, 6, false],
-		["Last Second", "Orion", 4, 4, false],
-		["Deck Testing", "Nyx", 1, 2, false],
+		["Temporal Rift", "Aeon", 1, false, false, ""],
+		["Midnight Duel", "Kairos", 2, true, false, ""],
+		["Casual Hourglass", "Sandy", 1, false, true, ""],
+		["Beginners Welcome", "Tempus", 1, false, false, ""],
+		["Ranked Clash", "Vesper", 2, false, false, ""],
+		["Paradox Lounge", "Lyra", 1, false, true, "time"],
+		["Last Second", "Orion", 2, false, false, ""],
+		["Deck Testing", "Nyx", 1, false, true, "time"],
 	]
 	for entry: Array in seeds:
-		_rooms.append(RoomInfo.new(_make_id(), entry[0], entry[1], entry[2], entry[3], entry[4]))
+		_rooms.append(
+			RoomInfo.new(
+				_make_id(), entry[0], entry[1], entry[2], PLAYERS, entry[3], entry[4], entry[5]
+			)
+		)

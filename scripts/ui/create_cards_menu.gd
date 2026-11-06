@@ -29,8 +29,8 @@ var _status_timer: Timer
 @onready var _type_option: OptionButton = %TypeOption
 @onready var _subtype_edit: LineEdit = %SubtypeEdit
 @onready var _time_input: NumberStepper = %TimeInput
+@onready var _points_input: NumberStepper = %PointsInput
 @onready var _stats_row: HBoxContainer = %StatsRow
-@onready var _stats_spacer: Control = %StatsSpacer
 @onready var _attack_input: NumberStepper = %AttackInput
 @onready var _defense_input: NumberStepper = %DefenseInput
 @onready var _rules_edit: TextEdit = %RulesEdit
@@ -59,6 +59,7 @@ func _ready() -> void:
 	_name_edit.text_changed.connect(func(text: String) -> void: _edit(&"card_name", text))
 	_subtype_edit.text_changed.connect(func(text: String) -> void: _edit(&"subtype", text))
 	_time_input.value_changed.connect(func(value: float) -> void: _edit(&"time_cost", int(value)))
+	_points_input.value_changed.connect(func(value: float) -> void: _edit(&"points", int(value)))
 	_attack_input.value_changed.connect(func(value: float) -> void: _edit(&"attack", int(value)))
 	_defense_input.value_changed.connect(func(value: float) -> void: _edit(&"defense", int(value)))
 	_rules_edit.text_changed.connect(func() -> void: _edit(&"rules_text", _rules_edit.text))
@@ -142,6 +143,8 @@ func _make_save_choice() -> AcceptDialog:
 
 func _ask_how_to_save() -> void:
 	_save_choice.popup_centered()
+	# A dialog focuses its first button when it opens, which made "Save to library" look chosen.
+	_save_choice.gui_release_focus()
 
 
 ## Shows `card` in the editor.
@@ -157,6 +160,7 @@ func _sync_form() -> void:
 	_subtype_edit.text = _card.subtype
 	_type_option.select(CardData.TYPES.find(_card.card_type))
 	_time_input.value = _card.time_cost
+	_points_input.value = _card.points
 	_attack_input.value = _card.attack
 	_defense_input.value = _card.defense
 	_rules_edit.text = _card.rules_text
@@ -201,10 +205,9 @@ func _on_type_selected(index: int) -> void:
 	_update_stats_row()
 
 
-## Without stats, an empty space keeps their place so the time cost stays the same size.
+## Attack and defense have their own line, which is only there for cards that have stats.
 func _update_stats_row() -> void:
 	_stats_row.visible = _card.has_stats()
-	_stats_spacer.visible = not _card.has_stats()
 
 
 func _open_image_dialog() -> void:

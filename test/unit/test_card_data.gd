@@ -45,7 +45,8 @@ func test_create_cards_scene_edits_the_card() -> void:
 	type_option.select(CardData.TYPES.find("Spell"))
 	type_option.item_selected.emit(type_option.selected)
 	assert_false(stats_row.visible, "spells do not")
-	assert_true(scene.get_node("%StatsSpacer").visible, "their space is kept, so the time cost keeps its size")
+	assert_eq(stats_row.get_parent().name, &"Form", "attack and defense have a line of their own")
+	assert_ne(stats_row.get_parent().name, &"CostRow")
 
 
 func test_clock_dial_prints_the_full_cost_past_a_full_turn() -> void:
@@ -71,12 +72,16 @@ func test_card_back_has_card_size_and_title_centers_first_o() -> void:
 	assert_eq(CardBack.TITLE[CardBack.FIRST_O], "O")
 
 
-func test_create_cards_scene_has_no_back_toggle_or_points() -> void:
+func test_create_cards_scene_has_points_but_no_back_toggle() -> void:
 	var scene: Control = load("res://scenes/create_cards.tscn").instantiate()
 	add_child_autofree(scene)
 	assert_null(scene.get_node_or_null("%ShowBackCheck"))
-	assert_null(scene.get_node_or_null("%PointsSpin"), "the points list sets a card's points")
-	assert_false(CardData.new().to_dict().has("points"))
+	var points_input: NumberStepper = scene.get_node("%PointsInput")
+	assert_eq(points_input.get_parent().get_parent().name, &"CostRow", "points sit beside the time cost")
+	points_input.value = 7
+	assert_eq(scene._card.points, 7, "the field sets the card's points")
+	assert_eq(CardData.from_dict(scene._card.to_dict()).points, 7, "and they are saved with the card")
+	assert_eq(CardData.new().points, 0)
 
 
 func test_create_cards_scene_saves_to_library() -> void:
@@ -116,7 +121,33 @@ func test_create_cards_save_button_asks_library_or_png() -> void:
 	assert_eq(choice.ok_button_text, "Save to library")
 	(scene.get_node("%SaveButton") as Button).pressed.emit()
 	assert_true(choice.visible, "pressing Save asks how to save")
+	assert_null(choice.gui_get_focus_owner(), "neither choice starts out selected")
 	choice.hide()
+
+
+func test_importing_a_card_png_shows_its_point_cost() -> void:
+	var directory := "user://test_import_points"
+	DirAccess.make_dir_recursive_absolute(directory)
+	var card := CardData.new()
+	card.id = "abc123"
+	card.card_name = "Chrono Drake"
+	card.points = 6
+	var plain := Image.create(744, 1040, false, Image.FORMAT_RGBA8).save_png_to_buffer()
+	var path := directory.path_join("shared.png")
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_buffer(CardPng.write_card(plain, card))
+	file.close()
+
+	var scene: Control = load("res://scenes/create_cards.tscn").instantiate()
+	scene.card_library = CardLibrary.new(directory)
+	add_child_autofree(scene)
+	scene._import_card(path)
+	assert_eq(int((scene.get_node("%PointsInput") as NumberStepper).value), 6, "the cost shows in the form")
+	assert_eq(scene.card_library.load_cards()[0].points, 6, "and it is kept in the library")
+
+	scene.card_library.delete_card("abc123")
+	DirAccess.remove_absolute(path)
+	DirAccess.remove_absolute(directory)
 
 
 func test_number_stepper_steps_types_and_clamps() -> void:

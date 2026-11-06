@@ -1,0 +1,11 @@
+{
+	"attack": 0,
+	"card_name": "Pause",
+	"card_type": "Spell",
+	"defense": 0,
+	"id": "official_pause",
+	"points": 1,
+	"rules_text": "Choose a creature. It cannot attack this turn.",
+	"subtype": "",
+	"time_cost": 15
+}

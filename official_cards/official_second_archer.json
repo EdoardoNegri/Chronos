@@ -1,0 +1,11 @@
+{
+	"attack": 2,
+	"card_name": "Second Archer",
+	"card_type": "Creature",
+	"defense": 1,
+	"id": "official_second_archer",
+	"points": 1,
+	"rules_text": "Can attack from behind other creatures.",
+	"subtype": "Archer",
+	"time_cost": 10
+}

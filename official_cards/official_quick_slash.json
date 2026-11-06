@@ -1,0 +1,11 @@
+{
+	"attack": 0,
+	"card_name": "Quick Slash",
+	"card_type": "Spell",
+	"defense": 0,
+	"id": "official_quick_slash",
+	"points": 1,
+	"rules_text": "Deal 1 damage to a creature. Draw a card.",
+	"subtype": "",
+	"time_cost": 5
+}

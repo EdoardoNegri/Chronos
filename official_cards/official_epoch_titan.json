@@ -1,0 +1,11 @@
+{
+	"attack": 7,
+	"card_name": "Epoch Titan",
+	"card_type": "Creature",
+	"defense": 7,
+	"id": "official_epoch_titan",
+	"points": 4,
+	"rules_text": "When this enters, destroy a creature with time cost 20 or less.",
+	"subtype": "Giant",
+	"time_cost": 55
+}

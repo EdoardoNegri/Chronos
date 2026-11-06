@@ -1,11 +1,12 @@
 extends Control
 ## Card database. It opens on a search form: fill in what you are looking for, choose how to
 ## show and sort the results, and press Search (or Enter in a text field). The results are a page
-## of their own; opening a card shows it large with its text, its deck-rule badges and the decks
-## that use it. The back arrow (or Escape) goes from a card to the results, from the results back
-## to the form as it was filled in, and from the form to the main menu. Clear empties the form.
+## of their own; opening a card shows it large next to a table with its name and time cost, type,
+## text, attack / defense and deck points. The back arrow (or Escape) goes from a card to the
+## results, from the results back to the form as it was filled in, and from the form to the main
+## menu. Clear empties the form.
 ##
-## The form is turned into a CardQuery search behind the scenes.
+## The search form itself is a CardSearchForm, which the deck builder uses too.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const MODES: Array[String] = ["Images", "Checklist", "Text Only"]
@@ -14,11 +15,6 @@ const MODE_CHECKLIST := 1
 const MODE_TEXT := 2
 const SORTS: Array[String] = ["Name", "Time cost", "Attack", "Defense", "Points", "Type"]
 const ORDERS: Array[String] = ["Ascending", "Descending"]
-const ANY_TYPE := "Any type"
-## Comparisons for the number filters: label in the form and operator in the search syntax.
-const COMPARISONS := [["Any", ""], ["=", "="], ["≠", "!="], ["≤", "<="], ["≥", ">="]]
-## Number filters in the form: label, search keyword and highest value.
-const NUMBER_FILTERS := [["Time cost", "time", 999], ["Points", "pts", 100], ["Attack", "atk", 99], ["Defense", "def", 99]]
 ## The smallest card image in the Images view; images grow so each row fills the width.
 const TILE_SIZE := Vector2(186, 260)
 const TILE_GAP := 14
@@ -36,17 +32,20 @@ const BOX_COLOR := Color(0.11, 0.12, 0.2, 0.9)
 const HEADING_COLOR := Color(0.14, 0.15, 0.24, 0.95)
 const HOVER := Color(1, 1, 1, 0.05)
 const PLACEHOLDER := Color(0.1, 0.11, 0.18)
-const GOOD_BADGE := Color(0.3, 0.55, 0.35)
-const NEUTRAL_BADGE := Color(0.3, 0.32, 0.42)
 
-const NO_CARDS_TEXT := "No cards in your library yet.\nMake some in Create Cards, or import cards in the deck builder."
+const NO_CARDS_TEXT := "No cards yet.\nMake some in Create Cards, or import cards there."
+const NO_OFFICIAL_TEXT := "No official cards yet.\nChoose Custom cards or Both to search the ones you made or imported."
+const NO_CUSTOM_TEXT := "No custom cards yet.\nMake some in Create Cards, or import cards there."
 const NO_MATCHES_TEXT := "No cards match this search."
-const NOT_IN_DECKS := "Not in any deck yet"
 
+## The cards the player created or imported: the custom cards.
 var card_library := CardLibrary.new()
-var deck_library := DeckLibrary.new()
+## The official cards that come with the game.
+var official_library := CardLibrary.new(CardLibrary.OFFICIAL_DIRECTORY)
 var points_list := PointsList.new()
 
+## Official and custom cards together; the catalog says which of them are custom.
+var _catalog: CardCatalog
 var _cards: Array[CardData] = []
 var _faces: Dictionary[String, Texture2D] = {}
 var _results: Array[CardData] = []
@@ -54,8 +53,6 @@ var _page := "form"
 var _flow: HFlowContainer
 var _flow_item_width := 0.0
 var _flow_item_ratio := 0.0
-## For each number filter: {"comparison": OptionButton, "value": NumberStepper, "key": String}.
-var _number_filters: Array[Dictionary] = []
 
 @onready var _back_button: Button = %BackButton
 @onready var _actions: Control = %Actions
@@ -65,11 +62,7 @@ var _number_filters: Array[Dictionary] = []
 @onready var _sort_option: OptionButton = %SortOption
 @onready var _order_option: OptionButton = %OrderOption
 @onready var _form_panel: Control = %FormPanel
-@onready var _name_edit: LineEdit = %NameEdit
-@onready var _type_option: OptionButton = %TypeOption
-@onready var _subtype_edit: LineEdit = %SubtypeEdit
-@onready var _card_text_edit: LineEdit = %CardTextEdit
-@onready var _numbers_row: GridContainer = %NumbersRow
+@onready var _form: CardSearchForm = %SearchForm
 @onready var _results_panel: Control = %ResultsPanel
 @onready var _results_scroll: ScrollContainer = %ResultsScroll
 @onready var _results_box: VBoxContainer = %Results
@@ -78,7 +71,6 @@ var _number_filters: Array[Dictionary] = []
 @onready var _detail_row: HBoxContainer = %DetailRow
 @onready var _detail_image: TextureRect = %DetailImage
 @onready var _detail_info: VBoxContainer = %DetailInfo
-@onready var _decks_column: VBoxContainer = %DecksColumn
 
 
 func _ready() -> void:
@@ -88,22 +80,17 @@ func _ready() -> void:
 		_sort_option.add_item(sort)
 	for order in ORDERS:
 		_order_option.add_item(order)
-	_type_option.add_item(ANY_TYPE)
-	for card_type in CardData.TYPES:
-		_type_option.add_item(card_type)
-	_build_number_filters()
 
 	_back_button.pressed.connect(_go_back_one_page)
 	_search_button.pressed.connect(_search_from_form)
 	_clear_button.pressed.connect(_clear_form)
-	for field: LineEdit in [_name_edit, _subtype_edit, _card_text_edit]:
-		field.text_submitted.connect(func(_text: String) -> void: _search_from_form())
+	_form.submitted.connect(_search_from_form)
 	_results_box.resized.connect(_fit_flow)
 	_detail_row.resized.connect(_fit_detail_image)
 
 	_load_library()
 	_show_page("form")
-	_name_edit.grab_focus()
+	_form.focus_name()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -123,11 +110,14 @@ func _go_back_one_page() -> void:
 			get_tree().change_scene_to_file(MAIN_MENU_SCENE)
 
 
+## Loads the official cards and the player's custom ones.
 func _load_library() -> void:
-	_cards = card_library.load_cards(false)
+	_catalog = CardCatalog.new(official_library, card_library)
+	_cards = _catalog.load_cards(false)
+	_form.setup(_cards, _catalog)
 	_faces.clear()
 	for card in _cards:
-		var face := card_library.load_face(card.id)
+		var face := _catalog.load_face(card.id)
 		if face != null:
 			face.generate_mipmaps()
 			_faces[card.id] = ImageTexture.create_from_image(face)
@@ -136,6 +126,7 @@ func _load_library() -> void:
 ## Shows one page: "form", "results" or "detail".
 func _show_page(page: String) -> void:
 	_page = page
+	_form.close_suggestions()
 	# Clear and Search sit under the form and belong to it.
 	_actions.visible = page == "form"
 	_form_panel.visible = page == "form"
@@ -143,134 +134,33 @@ func _show_page(page: String) -> void:
 	_detail_panel.visible = page == "detail"
 
 
-# --- The search form -----------------------------------------------------------------------
+# --- Searching -----------------------------------------------------------------------------
 
 
-## A field per number filter, two to a row: a comparison (Any, =, ≠, ≤, ≥) and a value.
-func _build_number_filters() -> void:
-	for filter: Array in NUMBER_FILTERS:
-		var field := VBoxContainer.new()
-		field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		field.add_theme_constant_override("separation", 4)
-		var label := Label.new()
-		label.theme_type_variation = &"FieldLabel"
-		label.text = filter[0]
-		field.add_child(label)
-
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		var comparison := OptionButton.new()
-		for item: Array in COMPARISONS:
-			comparison.add_item(item[0])
-		comparison.custom_minimum_size = Vector2(92, 0)
-		row.add_child(comparison)
-		var value := NumberStepper.new()
-		value.max_value = filter[2]
-		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(value)
-		field.add_child(row)
-		_numbers_row.add_child(field)
-
-		var entry := {"comparison": comparison, "value": value, "key": filter[1]}
-		_number_filters.append(entry)
-		# Picking a number means you want to filter by it, so "Any" becomes "=".
-		value.value_changed.connect(
-			func(_number: float) -> void:
-				if comparison.selected == 0:
-					comparison.select(1)
-				_dim_unused(entry)
-		)
-		comparison.item_selected.connect(func(_index: int) -> void: _dim_unused(entry))
-		comparison.gui_input.connect(_scroll_choice.bind(comparison))
-		_dim_unused(entry)
-
-
-## The mouse wheel over a comparison steps through its choices without opening it.
-func _scroll_choice(event: InputEvent, choice: OptionButton) -> void:
-	var wheel := event as InputEventMouseButton
-	if wheel == null or not wheel.pressed:
-		return
-	var step := 0
-	if wheel.button_index == MOUSE_BUTTON_WHEEL_UP:
-		step = -1
-	elif wheel.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-		step = 1
-	if step == 0:
-		return
-	# Taken here, so the form does not scroll as well.
-	choice.accept_event()
-	var index := clampi(choice.selected + step, 0, choice.item_count - 1)
-	if index != choice.selected:
-		choice.select(index)
-		choice.item_selected.emit(index)
-
-
-## A number that is not used ("Any") is shown faded.
-func _dim_unused(entry: Dictionary) -> void:
-	var value: Control = entry["value"]
-	value.modulate.a = 0.45 if (entry["comparison"] as OptionButton).selected == 0 else 1.0
-
-
-## The form as a search in CardQuery's syntax, e.g. 'drake t:creature time>=20'.
-func form_query() -> String:
-	var terms: Array[String] = []
-	for word in _name_edit.text.strip_edges().split(" ", false):
-		terms.append(_quote_if_needed(word))
-	if _type_option.selected > 0:
-		terms.append("t:" + CardData.TYPES[_type_option.selected - 1].to_lower())
-	var subtype := _subtype_edit.text.strip_edges()
-	if not subtype.is_empty():
-		terms.append("t:" + _quote_if_needed(subtype.to_lower()))
-	var card_text := _card_text_edit.text.strip_edges()
-	if not card_text.is_empty():
-		terms.append("o:" + _quote_if_needed(card_text.to_lower()))
-	for entry in _number_filters:
-		var operator: String = COMPARISONS[(entry["comparison"] as OptionButton).selected][1]
-		if not operator.is_empty():
-			terms.append("%s%s%d" % [entry["key"], operator, (entry["value"] as NumberStepper).value])
-	return " ".join(terms)
-
-
-## Puts text that would otherwise be read as syntax (spaces, ":", a leading "-", "or") in quotes.
-static func _quote_if_needed(text: String) -> String:
-	var plain := text.replace("\"", "")
-	var needs_quotes := (
-		plain.contains(" ")
-		or plain.contains(":")
-		or plain.begins_with("-")
-		or plain.to_lower() == "or"
-	)
-	return "\"%s\"" % plain if needs_quotes else plain
-
-
+## Filters and sorts the cards by the form, and shows the results page.
 func _search_from_form() -> void:
-	_run_search(form_query())
+	_results = _form.search(_cards, points_list)
+	_results.sort_custom(_comes_first)
+	_show_results()
 	_show_page("results")
 
 
 func _clear_form() -> void:
-	for field: LineEdit in [_name_edit, _subtype_edit, _card_text_edit]:
-		field.clear()
-	_type_option.select(0)
-	for entry in _number_filters:
-		(entry["value"] as NumberStepper).value = 0
-		(entry["comparison"] as OptionButton).select(0)
-		_dim_unused(entry)
-	_name_edit.grab_focus()
+	_form.clear()
+	_form.focus_name()
 
 
-# --- Searching -----------------------------------------------------------------------------
-
-
-## Filters and sorts the library by a search (see form_query) and lists the results.
-func _run_search(search: String) -> void:
-	var query := CardQuery.parse(search, points_list)
-	_results.clear()
-	for card in _cards:
-		if query.matches(card):
-			_results.append(card)
-	_results.sort_custom(_comes_first)
-	_show_results()
+## Why the results are empty: nothing to search in the chosen cards, or nothing that matches.
+func _empty_text() -> String:
+	if _cards.any(_form.is_searched):
+		return NO_MATCHES_TEXT
+	match _form.source():
+		CardSearchForm.SOURCE_CUSTOM:
+			return NO_CUSTOM_TEXT
+		CardSearchForm.SOURCE_OFFICIAL:
+			if _catalog.has_custom():
+				return NO_OFFICIAL_TEXT
+	return NO_CARDS_TEXT
 
 
 func _comes_first(a: CardData, b: CardData) -> bool:
@@ -308,7 +198,7 @@ func _show_results() -> void:
 	var empty := _results.is_empty()
 	_results_scroll.visible = not empty
 	_empty_label.visible = empty
-	_empty_label.text = NO_CARDS_TEXT if _cards.is_empty() else NO_MATCHES_TEXT
+	_empty_label.text = _empty_text()
 	if empty:
 		return
 
@@ -470,13 +360,10 @@ func _open_card(card_id: String) -> void:
 		return
 	_detail_image.texture = _faces.get(card_id)
 	_detail_image.visible = _detail_image.texture != null
-	for container: Container in [_detail_info, _decks_column]:
-		for child in container.get_children():
-			container.remove_child(child)
-			child.queue_free()
+	for child in _detail_info.get_children():
+		_detail_info.remove_child(child)
+		child.queue_free()
 	_detail_info.add_child(_make_card_text_box(card, true))
-	_detail_info.add_child(_make_rule_badges(card))
-	_fill_decks_column(card)
 	_show_page("detail")
 	_fit_detail_image()
 
@@ -496,7 +383,7 @@ func _fit_detail_image() -> void:
 
 
 ## A box in rows: name with the time cost clock, type line, card text, attack / defense, and on
-## the card page an id line at the bottom.
+## the card page the deck points at the bottom.
 func _make_card_text_box(card: CardData, full: bool) -> PanelContainer:
 	var box := PanelContainer.new()
 	box.add_theme_stylebox_override("panel", _box(BOX_COLOR, LINE, 1, 10))
@@ -525,8 +412,22 @@ func _make_card_text_box(card: CardData, full: bool) -> PanelContainer:
 	if card.has_stats():
 		_add_box_row(rows, _make_text("%d / %d" % [card.attack, card.defense], 19 if full else 16, INK), true)
 	if full:
-		_add_box_row(rows, _make_text("Card id %s" % card.id, 14, MUTED), true)
+		_add_box_row(rows, _make_points_row(card), true)
 	return box
+
+
+## "Deck points" on the left and what the card costs against a deck's point budget on the right.
+func _make_points_row(card: CardData) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var label := _make_text("Deck points", 19, MUTED)
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	var value := _make_text(str(points_list.points_for(card)), 19, INK)
+	value.autowrap_mode = TextServer.AUTOWRAP_OFF
+	row.add_child(value)
+	return row
 
 
 func _add_box_row(rows: VBoxContainer, content: Control, line_above: bool) -> void:
@@ -556,64 +457,11 @@ func _make_text(text: String, font_size: int, color: Color) -> Label:
 	return label
 
 
-## Badges for the deck-building rules: what the card costs from the points list, and how many
-## copies a deck may have.
-func _make_rule_badges(card: CardData) -> GridContainer:
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 8)
-	var listed := points_list.has_card(card)
-	var points := points_list.points_for(card)
-	var badges := [
-		[
-			("%d %s" % [points, "point" if points == 1 else "points"]) if listed else "Not listed",
-			GOOD_BADGE if listed else NEUTRAL_BADGE,
-			"Points list" if listed else "Not on the points list, so it costs 0 points",
-		],
-		["Up to %d" % DeckData.MAX_COPIES, GOOD_BADGE, "Copies per deck"],
-	]
-	for badge: Array in badges:
-		var tag := Label.new()
-		tag.text = badge[0]
-		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		tag.custom_minimum_size = Vector2(120, 0)
-		tag.add_theme_font_size_override("font_size", 15)
-		tag.add_theme_color_override("font_color", INK)
-		tag.add_theme_stylebox_override("normal", _box(badge[1], badge[1], 0, 6, Vector4(10, 4, 10, 4)))
-		grid.add_child(tag)
-		var label := _make_text(badge[2], 16, INK)
-		label.autowrap_mode = TextServer.AUTOWRAP_OFF
-		grid.add_child(label)
-	return grid
-
-
-## The decks that use the card, with how many copies.
-func _fill_decks_column(card: CardData) -> void:
-	var title := _make_text("In your decks", 15, MUTED)
-	title.theme_type_variation = &"FieldLabel"
-	_decks_column.add_child(title)
-	var uses: Array[String] = []
-	for deck_name in deck_library.list_names():
-		var deck := deck_library.load_deck(deck_name)
-		if deck != null and deck.copies(card.id) > 0:
-			uses.append("%s  ×%d" % [deck_name, deck.copies(card.id)])
-	if uses.is_empty():
-		uses.append(NOT_IN_DECKS)
-	for use in uses:
-		var entry := PanelContainer.new()
-		var underline := _box(Color(0, 0, 0, 0), LINE, 0, 0, Vector4(0, 8, 0, 8))
-		underline.border_width_bottom = 1
-		entry.add_theme_stylebox_override("panel", underline)
-		entry.add_child(_make_text(use, 17, MUTED if use == NOT_IN_DECKS else INK))
-		_decks_column.add_child(entry)
-
-
 # --- Helpers -------------------------------------------------------------------------------
 
 
 func _points_text(card: CardData) -> String:
-	return str(points_list.points_for(card)) if points_list.has_card(card) else ""
+	return str(points_list.points_for(card)) if points_list.has_card(card) or card.points > 0 else ""
 
 
 func _fill(control: Control) -> void:

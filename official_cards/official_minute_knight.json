@@ -1,0 +1,11 @@
+{
+	"attack": 3,
+	"card_name": "Minute Knight",
+	"card_type": "Creature",
+	"defense": 3,
+	"id": "official_minute_knight",
+	"points": 2,
+	"rules_text": "Strikes exactly on the minute.",
+	"subtype": "Warrior",
+	"time_cost": 20
+}

@@ -1,0 +1,11 @@
+{
+	"attack": 0,
+	"card_name": "Zap",
+	"card_type": "Spell",
+	"defense": 0,
+	"id": "official_zap",
+	"points": 1,
+	"rules_text": "Deal 2 damage to a creature.",
+	"subtype": "",
+	"time_cost": 5
+}

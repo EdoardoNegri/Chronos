@@ -1,0 +1,11 @@
+{
+	"attack": 0,
+	"card_name": "Time Skip",
+	"card_type": "Spell",
+	"defense": 0,
+	"id": "official_time_skip",
+	"points": 3,
+	"rules_text": "Draw 3 cards.",
+	"subtype": "",
+	"time_cost": 30
+}

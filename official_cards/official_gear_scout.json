@@ -1,0 +1,11 @@
+{
+	"attack": 2,
+	"card_name": "Gear Scout",
+	"card_type": "Creature",
+	"defense": 1,
+	"id": "official_gear_scout",
+	"points": 1,
+	"rules_text": "When this enters, look at the top card of your deck.",
+	"subtype": "Construct",
+	"time_cost": 15
+}

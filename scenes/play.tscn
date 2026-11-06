@@ -157,6 +157,12 @@ theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
 theme_override_font_sizes/font_size = 32
 text = "Host a room"
 
+[node name="PlayersNote" type="Label" parent="HostOverlay/Center/Dialog/Margin/Form"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 16
+text = "A game is between two players."
+
 [node name="NameLabel" type="Label" parent="HostOverlay/Center/Dialog/Margin/Form"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
@@ -168,19 +174,30 @@ unique_name_in_owner = true
 layout_mode = 2
 max_length = 32
 
-[node name="PlayersLabel" type="Label" parent="HostOverlay/Center/Dialog/Margin/Form"]
+[node name="PasswordLabel" type="Label" parent="HostOverlay/Center/Dialog/Margin/Form"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
 theme_override_font_sizes/font_size = 16
-text = "Max players"
+text = "Password (optional)"
 
-[node name="MaxPlayersSpin" type="SpinBox" parent="HostOverlay/Center/Dialog/Margin/Form"]
+[node name="PasswordEdit" type="LineEdit" parent="HostOverlay/Center/Dialog/Margin/Form"]
 unique_name_in_owner = true
 layout_mode = 2
-min_value = 2.0
-max_value = 8.0
-value = 2.0
-rounded = true
+tooltip_text = "Whoever joins the room has to type this. Leave it empty and anyone can join."
+placeholder_text = "Leave empty for no password"
+max_length = 32
+secret = true
+
+[node name="ModeLabel" type="Label" parent="HostOverlay/Center/Dialog/Margin/Form"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 16
+text = "Game mode"
+
+[node name="GameModeOption" type="OptionButton" parent="HostOverlay/Center/Dialog/Margin/Form"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Standard uses the official cards only. Custom cards also lets players use cards they created or imported."
 
 [node name="FormError" type="Label" parent="HostOverlay/Center/Dialog/Margin/Form"]
 unique_name_in_owner = true
@@ -205,6 +222,169 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"PrimaryButton"
 text = "Create"
+
+[node name="JoinOverlay" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="JoinOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.65)
+
+[node name="Center" type="CenterContainer" parent="JoinOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dialog" type="PanelContainer" parent="JoinOverlay/Center"]
+custom_minimum_size = Vector2(460, 0)
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="Margin" type="MarginContainer" parent="JoinOverlay/Center/Dialog"]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 24
+
+[node name="Form" type="VBoxContainer" parent="JoinOverlay/Center/Dialog/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="JoinTitle" type="Label" parent="JoinOverlay/Center/Dialog/Margin/Form"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
+theme_override_font_sizes/font_size = 32
+text = "Password needed"
+
+[node name="JoinRoomLabel" type="Label" parent="JoinOverlay/Center/Dialog/Margin/Form"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 16
+text = "This room has a password."
+autowrap_mode = 3
+
+[node name="JoinPasswordEdit" type="LineEdit" parent="JoinOverlay/Center/Dialog/Margin/Form"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Password"
+max_length = 32
+secret = true
+
+[node name="JoinError" type="Label" parent="JoinOverlay/Center/Dialog/Margin/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.5, 0.45, 1)
+theme_override_font_sizes/font_size = 16
+
+[node name="Buttons" type="HBoxContainer" parent="JoinOverlay/Center/Dialog/Margin/Form"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CancelJoinButton" type="Button" parent="JoinOverlay/Center/Dialog/Margin/Form/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Cancel"
+
+[node name="ConfirmJoinButton" type="Button" parent="JoinOverlay/Center/Dialog/Margin/Form/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "Join"
+
+[node name="AccountOverlay" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="AccountOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.8)
+
+[node name="Center" type="CenterContainer" parent="AccountOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dialog" type="PanelContainer" parent="AccountOverlay/Center"]
+custom_minimum_size = Vector2(500, 0)
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="Margin" type="MarginContainer" parent="AccountOverlay/Center/Dialog"]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 24
+
+[node name="Form" type="VBoxContainer" parent="AccountOverlay/Center/Dialog/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="AccountTitle" type="Label" parent="AccountOverlay/Center/Dialog/Margin/Form"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
+theme_override_font_sizes/font_size = 32
+text = "Pick a name"
+
+[node name="AccountHint" type="Label" parent="AccountOverlay/Center/Dialog/Margin/Form"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 17
+text = "This is how other players see you online. You only need a name: no email and no password. You can change it later in Settings."
+autowrap_mode = 3
+
+[node name="AccountNameEdit" type="LineEdit" parent="AccountOverlay/Center/Dialog/Margin/Form"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Your name"
+max_length = 20
+
+[node name="AccountError" type="Label" parent="AccountOverlay/Center/Dialog/Margin/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.5, 0.45, 1)
+theme_override_font_sizes/font_size = 16
+
+[node name="AccountContinueButton" type="Button" parent="AccountOverlay/Center/Dialog/Margin/Form"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Continue"
 
 [node name="BackButton" type="Button" parent="."]
 unique_name_in_owner = true

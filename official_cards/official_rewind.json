@@ -1,0 +1,11 @@
+{
+	"attack": 0,
+	"card_name": "Rewind",
+	"card_type": "Spell",
+	"defense": 0,
+	"id": "official_rewind",
+	"points": 2,
+	"rules_text": "Return a creature to its owner's hand.",
+	"subtype": "",
+	"time_cost": 10
+}

@@ -1,0 +1,11 @@
+{
+	"attack": 2,
+	"card_name": "Brass Cadet",
+	"card_type": "Creature",
+	"defense": 2,
+	"id": "official_brass_cadet",
+	"points": 1,
+	"rules_text": "Can attack the turn it enters.",
+	"subtype": "Construct",
+	"time_cost": 15
+}

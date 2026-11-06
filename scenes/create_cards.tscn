@@ -146,52 +146,59 @@ layout_mode = 2
 script = ExtResource("10_stepper")
 max_value = 999
 
-[node name="StatsRow" type="HBoxContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_stretch_ratio = 2.0
-theme_override_constants/separation = 12
-
-[node name="AttackField" type="VBoxContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow/StatsRow"]
+[node name="PointsField" type="VBoxContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
-[node name="Label" type="Label" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow/StatsRow/AttackField"]
+[node name="Label" type="Label" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow/PointsField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Deck points (not printed)"
+
+[node name="PointsInput" type="PanelContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow/PointsField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "What the card costs against a deck's point budget. A card on the points list costs what the list says instead."
+script = ExtResource("10_stepper")
+max_value = 100
+
+[node name="StatsRow" type="HBoxContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="AttackField" type="VBoxContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/StatsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/StatsRow/AttackField"]
 layout_mode = 2
 theme_type_variation = &"FieldLabel"
 text = "Attack"
 
-[node name="AttackInput" type="PanelContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow/StatsRow/AttackField"]
+[node name="AttackInput" type="PanelContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/StatsRow/AttackField"]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("10_stepper")
 max_value = 99
 
-[node name="DefenseField" type="VBoxContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow/StatsRow"]
+[node name="DefenseField" type="VBoxContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/StatsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
-[node name="Label" type="Label" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow/StatsRow/DefenseField"]
+[node name="Label" type="Label" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/StatsRow/DefenseField"]
 layout_mode = 2
 theme_type_variation = &"FieldLabel"
 text = "Defense"
 
-[node name="DefenseInput" type="PanelContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow/StatsRow/DefenseField"]
+[node name="DefenseInput" type="PanelContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/StatsRow/DefenseField"]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("10_stepper")
 max_value = 99
-
-[node name="StatsSpacer" type="Control" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_stretch_ratio = 2.0
-mouse_filter = 2
 
 [node name="TextField" type="VBoxContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
 layout_mode = 2
@@ -238,6 +245,7 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Save the card to your library, or download it as a PNG that other players can import."
+theme_type_variation = &"PrimaryButton"
 text = "Save..."
 
 [node name="Status" type="Label" parent="Content/Layout/Body/LeftColumn"]

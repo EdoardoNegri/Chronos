@@ -5,6 +5,7 @@ const SCREENS: Array[String] = [
 	"res://scenes/decks.tscn",
 	"res://scenes/database.tscn",
 	"res://scenes/play.tscn",
+	"res://scenes/room.tscn",
 	"res://scenes/rules.tscn",
 ]
 
@@ -47,3 +48,83 @@ func test_settings_opens_over_the_screen_and_closes() -> void:
 	settings.close()
 	await get_tree().process_frame
 	assert_false(is_instance_valid(settings), "closing removes it")
+
+
+const TEST_PROFILE_PATH := "user://test_settings_profile/profile.cfg"
+
+
+func after_each() -> void:
+	DirAccess.remove_absolute(TEST_PROFILE_PATH)
+	DirAccess.remove_absolute(TEST_PROFILE_PATH.get_base_dir())
+
+
+func _open_settings(player_name: String) -> Control:
+	var profile: PlayerProfile = autofree(PlayerProfile.new(TEST_PROFILE_PATH))
+	if not player_name.is_empty():
+		profile.set_player_name(player_name)
+	var settings: Control = load("res://scenes/settings.tscn").instantiate()
+	settings.profile = profile
+	add_child_autofree(settings)
+	return settings
+
+
+func test_settings_lets_the_player_change_their_name() -> void:
+	var settings := _open_settings("Aeon")
+	var edit: LineEdit = settings.get_node("%NameEdit")
+	var status: Label = settings.get_node("%NameStatus")
+	assert_eq(edit.text, "Aeon", "it shows the current name")
+	edit.text = "  Kairos "
+	edit.text_submitted.emit(edit.text)
+	assert_eq(settings.profile.player_name, "Kairos")
+	assert_eq(edit.text, "Kairos")
+	assert_eq(status.text, "Saved.")
+
+	edit.text = "Orion"
+	settings.close()
+	assert_eq(settings.profile.player_name, "Orion", "a name typed and left without Enter still counts")
+
+
+func test_settings_keeps_the_old_name_when_the_new_one_cannot_be_used() -> void:
+	var settings := _open_settings("Aeon")
+	var edit: LineEdit = settings.get_node("%NameEdit")
+	edit.text = ""
+	edit.text_submitted.emit("")
+	assert_eq(settings.profile.player_name, "Aeon")
+	assert_eq(edit.text, "Aeon", "the field goes back to the name that is kept")
+	assert_ne((settings.get_node("%NameStatus") as Label).text, "", "and says why")
+	assert_eq(edit.max_length, PlayerProfile.MAX_NAME_LENGTH, "the field stops a name from getting too long")
+
+
+func test_settings_before_there_is_a_name_does_not_nag() -> void:
+	var settings := _open_settings("")
+	var edit: LineEdit = settings.get_node("%NameEdit")
+	assert_eq(edit.text, "")
+	edit.text_submitted.emit("")
+	assert_eq((settings.get_node("%NameStatus") as Label).text, "", "an empty field is fine without a name")
+	assert_false(settings.profile.has_account())
+	edit.text = "Nova"
+	edit.text_submitted.emit("Nova")
+	assert_true(settings.profile.has_account(), "typing a name here is enough to have one")
+	assert_eq(settings.profile.player_name, "Nova")
+
+
+func test_settings_lets_the_player_choose_the_server() -> void:
+	var settings := _open_settings("Aeon")
+	var edit: LineEdit = settings.get_node("%ServerEdit")
+	var status: Label = settings.get_node("%ServerStatus")
+	assert_eq(edit.text, PlayerProfile.DEFAULT_SERVER_URL, "it starts on this computer")
+	edit.text = "  abc.trycloudflare.com  "
+	edit.text_submitted.emit(edit.text)
+	assert_eq(settings.profile.server_url, "abc.trycloudflare.com")
+	assert_eq(edit.text, "abc.trycloudflare.com")
+	assert_string_contains(status.text, "Saved")
+	assert_eq(autofree(PlayerProfile.new(TEST_PROFILE_PATH)).server_url, "abc.trycloudflare.com", "and it is kept")
+
+	edit.text = ""
+	edit.text_submitted.emit("")
+	assert_eq(settings.profile.server_url, PlayerProfile.DEFAULT_SERVER_URL, "an empty address goes back to this computer")
+	assert_eq(edit.text, PlayerProfile.DEFAULT_SERVER_URL)
+
+	edit.text = "wss://typed.example"
+	settings.close()
+	assert_eq(settings.profile.server_url, "wss://typed.example", "an address typed but not confirmed still counts")

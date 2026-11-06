@@ -5,6 +5,7 @@
 [ext_resource type="Theme" path="res://assets/themes/menu_theme.tres" id="3_theme"]
 [ext_resource type="Script" path="res://scripts/ui/back_arrow.gd" id="9_back"]
 [ext_resource type="Script" path="res://scripts/ui/settings_button.gd" id="11_settings"]
+[ext_resource type="PackedScene" path="res://scenes/card_search_form.tscn" id="12_form"]
 
 [node name="Database" type="Control"]
 layout_mode = 3
@@ -68,73 +69,9 @@ theme_override_constants/margin_right = 23
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="NameField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/NameField"]
-layout_mode = 2
-theme_type_variation = &"FieldLabel"
-text = "Name"
-
-[node name="NameEdit" type="LineEdit" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/NameField"]
+[node name="SearchForm" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form" instance=ExtResource("12_form")]
 unique_name_in_owner = true
 layout_mode = 2
-placeholder_text = "Any words in the name"
-
-[node name="TypeRow" type="HBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="TypeField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 4
-
-[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow/TypeField"]
-layout_mode = 2
-theme_type_variation = &"FieldLabel"
-text = "Type"
-
-[node name="TypeOption" type="OptionButton" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow/TypeField"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="SubtypeField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 4
-
-[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow/SubtypeField"]
-layout_mode = 2
-theme_type_variation = &"FieldLabel"
-text = "Subtype"
-
-[node name="SubtypeEdit" type="LineEdit" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TypeRow/SubtypeField"]
-unique_name_in_owner = true
-layout_mode = 2
-placeholder_text = "e.g. Dragon"
-
-[node name="TextField" type="VBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Label" type="Label" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TextField"]
-layout_mode = 2
-theme_type_variation = &"FieldLabel"
-text = "Card text"
-
-[node name="CardTextEdit" type="LineEdit" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/TextField"]
-unique_name_in_owner = true
-layout_mode = 2
-placeholder_text = "Words or a phrase in the card text"
-
-[node name="NumbersRow" type="GridContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/h_separation = 12
-theme_override_constants/v_separation = 14
-columns = 2
 
 [node name="DisplayRow" type="HBoxContainer" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form"]
 layout_mode = 2
@@ -280,11 +217,6 @@ theme_override_constants/separation = 18
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 18
-
-[node name="DecksColumn" type="VBoxContainer" parent="Content/Layout/DetailPanel/DetailMargin/DetailRow/InfoScroll/DetailColumn"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 0
 
 [node name="BackButton" type="Button" parent="."]
 unique_name_in_owner = true

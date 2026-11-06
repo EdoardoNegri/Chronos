@@ -35,6 +35,17 @@ func load_deck(deck_name: String) -> DeckData:
 	return DeckData.from_dict(parsed) if parsed is Dictionary else null
 
 
+## The deck stored in a JSON file somewhere else (such as a saved deck another player sent), or
+## null if the file is not a deck. Nothing is saved.
+func read_file(path: String) -> DeckData:
+	if not FileAccess.file_exists(path):
+		return null
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not (parsed is Dictionary and parsed.has("deck_name") and parsed.get("cards") is Dictionary):
+		return null
+	return DeckData.from_dict(parsed)
+
+
 func list_names() -> Array[String]:
 	var names: Array[String] = []
 	if not DirAccess.dir_exists_absolute(directory):

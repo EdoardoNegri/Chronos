@@ -1,24 +1,35 @@
 extends Control
 ## Deck builder, laid out like EDOPro's: the selected card on the left, the deck in the middle
-## and the searchable card list on the right.
+## and the searchable card list on the right. The list has a search box and a Filters button, which
+## opens the same search form as the database (see CardSearchForm); both apply together.
 ##
 ## Double-click or right-click a card in the list to add it, and the same on a deck card to
 ## remove it. Cards can also be dragged between the two.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const NEW_DECK_TEXT := "New deck"
-const ALL_TYPES_TEXT := "All types"
+const IMPORT_DECK_TEXT := "Import deck..."
+## Positions in the deck picker: "New deck", then "Import deck...", then the saved decks.
+const NEW_DECK_INDEX := 0
+const IMPORT_DECK_INDEX := 1
+const FIRST_SAVED_DECK_INDEX := 2
+## How much wider than usual the card list is while the filters are open (the deck is 1.6).
+const FILTERS_OPEN_RATIO := 1.8
+## The most of the card list's column the filters may take.
+const FILTERS_MAX_SHARE := 0.55
 const SOURCE_DECK := &"deck"
 const SOURCE_RESULTS := &"results"
 const STATUS_COLOR := Color(0.62, 0.64, 0.74)
 const ERROR_COLOR := Color(0.9, 0.5, 0.45)
 const SUCCESS_COLOR := Color(0.5, 0.82, 0.55)
 const INK_COLOR := Color(0.92, 0.9, 0.85)
-const NO_CARDS_TEXT := "No cards in your library yet.\nMake some in Create Cards and save them."
-const CARD_FILTERS: Array[String] = ["*.png ; Card PNG"]
-const POINTS_FILTERS: Array[String] = ["*.json ; Points list"]
+const NO_CARDS_TEXT := "No cards yet.\nMake some in Create Cards and save them."
+const DECK_FILTERS: Array[String] = ["*.json ; Deck"]
 
+## The cards the player created or imported: the custom cards.
 var card_library := CardLibrary.new()
+## The official cards that come with the game.
+var official_library := CardLibrary.new(CardLibrary.OFFICIAL_DIRECTORY)
 var deck_library := DeckLibrary.new()
 var points_list := PointsList.new()
 
@@ -28,12 +39,11 @@ var _textures: Dictionary[String, Texture2D] = {}
 var _deck := DeckData.new()
 var _selected_id := ""
 var _result_thumbs: Dictionary[String, CardThumb] = {}
-var _cards_dialog: FileDialog
-var _points_dialog: FileDialog
+var _deck_dialog: FileDialog
+## The deck picker's position for the deck that is open (it never rests on "Import deck...").
+var _open_option := NEW_DECK_INDEX
 
 @onready var _back_button: Button = %BackButton
-@onready var _import_cards_button: Button = %ImportCardsButton
-@onready var _import_points_button: Button = %ImportPointsButton
 @onready var _preview: TextureRect = %Preview
 @onready var _details: RichTextLabel = %Details
 @onready var _deck_option: OptionButton = %DeckOption
@@ -48,7 +58,11 @@ var _points_dialog: FileDialog
 @onready var _deck_grid: HFlowContainer = %DeckGrid
 @onready var _status: Label = %Status
 @onready var _search_edit: LineEdit = %SearchEdit
-@onready var _type_filter: OptionButton = %TypeFilter
+@onready var _search_panel: Control = %SearchPanel
+@onready var _filters_button: Button = %FiltersButton
+@onready var _filters_scroll: ScrollContainer = %FiltersScroll
+@onready var _filters_form: CardSearchForm = %SearchForm
+@onready var _clear_filters_button: Button = %ClearFiltersButton
 @onready var _result_count: Label = %ResultCount
 @onready var _result_scroll: ScrollContainer = %ResultScroll
 @onready var _result_grid: HFlowContainer = %ResultGrid
@@ -58,7 +72,13 @@ var _points_dialog: FileDialog
 func _ready() -> void:
 	_back_button.pressed.connect(_go_back)
 	_search_edit.text_changed.connect(func(_text: String) -> void: _refresh_results())
-	_type_filter.item_selected.connect(func(_index: int) -> void: _refresh_results())
+	_search_edit.gui_input.connect(SearchText.pair_quotes.bind(_search_edit))
+	_filters_button.toggled.connect(_set_filters_open)
+	_filters_form.changed.connect(_on_filters_changed)
+	_clear_filters_button.pressed.connect(_filters_form.clear)
+	# The card list is narrow, and the deck can use every card, so the choice starts on Both.
+	_filters_form.compact = true
+	_filters_form.set_source(CardSearchForm.SOURCE_BOTH)
 	_deck_option.item_selected.connect(_on_deck_option_selected)
 	_name_edit.text_changed.connect(func(text: String) -> void: _deck.deck_name = text)
 	_save_button.pressed.connect(_save_deck)
@@ -66,16 +86,8 @@ func _ready() -> void:
 	_clear_button.pressed.connect(_clear_deck)
 	_deck_scroll.set_drag_forwarding(Callable(), _can_drop_on_deck, _drop_on_deck)
 	_result_scroll.set_drag_forwarding(Callable(), _can_drop_on_results, _drop_on_results)
-	_cards_dialog = _make_dialog(FileDialog.FILE_MODE_OPEN_FILES, CARD_FILTERS)
-	_cards_dialog.files_selected.connect(_import_cards)
-	_points_dialog = _make_dialog(FileDialog.FILE_MODE_OPEN_FILE, POINTS_FILTERS)
-	_points_dialog.file_selected.connect(_import_points)
-	_import_cards_button.pressed.connect(func() -> void: _cards_dialog.popup_centered_ratio(0.7))
-	_import_points_button.pressed.connect(func() -> void: _points_dialog.popup_centered_ratio(0.7))
-
-	_type_filter.add_item(ALL_TYPES_TEXT)
-	for card_type in CardData.TYPES:
-		_type_filter.add_item(card_type)
+	_deck_dialog = _make_dialog(FileDialog.FILE_MODE_OPEN_FILE, DECK_FILTERS)
+	_deck_dialog.file_selected.connect(_import_deck)
 
 	_load_library()
 	_refresh_deck_options()
@@ -85,10 +97,14 @@ func _ready() -> void:
 	_search_edit.grab_focus()
 
 
+## Escape closes the filters if they are open, and otherwise goes back to the main menu.
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		_go_back()
+		if _filters_scroll.visible:
+			_filters_button.button_pressed = false
+		else:
+			_go_back()
 
 
 func _go_back() -> void:
@@ -108,46 +124,19 @@ func _make_dialog(mode: FileDialog.FileMode, filters: Array[String]) -> FileDial
 # --- Library -------------------------------------------------------------------------------
 
 
+## Decks can use the official cards and the player's custom ones.
 func _load_library() -> void:
-	_cards = card_library.load_cards(false)
+	var catalog := CardCatalog.new(official_library, card_library)
+	_cards = catalog.load_cards(false)
+	_filters_form.setup(_cards, catalog)
 	_cards_by_id.clear()
 	_textures.clear()
 	for card in _cards:
 		_cards_by_id[card.id] = card
-		var face := card_library.load_face(card.id)
+		var face := catalog.load_face(card.id)
 		if face != null:
 			face.generate_mipmaps()
 			_textures[card.id] = ImageTexture.create_from_image(face)
-
-
-## Adds cards from PNGs other players sent, then shows the library again.
-func _import_cards(paths: PackedStringArray) -> void:
-	var imported := 0
-	for path in paths:
-		if card_library.import_png(path) != null:
-			imported += 1
-	_load_library()
-	_refresh_results()
-	_refresh_deck()
-	var failed := paths.size() - imported
-	if failed == 0:
-		_show_status("Imported %d %s." % [imported, "card" if imported == 1 else "cards"], SUCCESS_COLOR)
-	else:
-		_show_status(
-			(
-				"Imported %d, but %d %s not a card PNG."
-				% [imported, failed, "file is" if failed == 1 else "files are"]
-			),
-			ERROR_COLOR
-		)
-
-
-func _import_points(path: String) -> void:
-	if points_list.import_file(path) != OK:
-		_show_status("Could not read “%s” as a points list." % path.get_file(), ERROR_COLOR)
-		return
-	_refresh_deck()
-	_show_status("Loaded a points list with %d cards." % points_list.size(), SUCCESS_COLOR)
 
 
 func _make_thumb(card_id: String, source: StringName) -> CardThumb:
@@ -168,15 +157,41 @@ func _clear_children(container: Container) -> void:
 # --- Card list (right) ---------------------------------------------------------------------
 
 
+## Opens or closes the filters (the same form as in the database). The list of cards gets more room
+## while they are open, so the form's fields are not squeezed.
+func _set_filters_open(open: bool) -> void:
+	_filters_scroll.visible = open
+	_search_panel.size_flags_stretch_ratio = FILTERS_OPEN_RATIO if open else 1.0
+	if open:
+		_fit_filters()
+		_filters_form.focus_name()
+	else:
+		_filters_form.close_suggestions()
+
+
+## The filters are as tall as the form needs, but leave the list of cards at least half the column
+## (the form scrolls when it does not fit).
+func _fit_filters() -> void:
+	var column := _filters_scroll.get_parent_control().get_parent_control()
+	_filters_scroll.custom_minimum_size.y = minf(
+		_filters_form.get_combined_minimum_size().y + 4.0, column.size.y * FILTERS_MAX_SHARE
+	)
+
+
+## Shows how many filters are in use on the button, and lists the cards again.
+func _on_filters_changed() -> void:
+	var active := _filters_form.active_count()
+	_filters_button.text = "Filters" if active == 0 else "Filters (%d)" % active
+	_refresh_results()
+
+
+## The cards the filters and the search box both allow.
 func _refresh_results() -> void:
 	_clear_children(_result_grid)
 	_result_thumbs.clear()
-	var query := _search_edit.text.strip_edges().to_lower()
-	var type_index := _type_filter.selected
-	for card in _cards:
-		if type_index > 0 and card.card_type != CardData.TYPES[type_index - 1]:
-			continue
-		if not query.is_empty() and not _matches(card, query):
+	var words := SearchText.words(_search_edit.text)
+	for card in _filters_form.search(_cards, points_list):
+		if not words.is_empty() and not _matches(card, words):
 			continue
 		var thumb := _make_thumb(card.id, SOURCE_RESULTS)
 		thumb.activated.connect(_add_card)
@@ -194,12 +209,10 @@ func _refresh_results() -> void:
 	_apply_highlight()
 
 
-func _matches(card: CardData, query: String) -> bool:
-	return (
-		card.card_name.to_lower().contains(query)
-		or card.subtype.to_lower().contains(query)
-		or card.rules_text.to_lower().contains(query)
-	)
+## Whether the card's name, subtype and text together hold every word searched for (see SearchText).
+func _matches(card: CardData, words: PackedStringArray) -> bool:
+	var haystack := "%s %s %s" % [card.card_name, card.subtype, card.rules_text]
+	return SearchText.contains_all(haystack.to_lower(), words)
 
 
 func _update_badges() -> void:
@@ -288,14 +301,23 @@ func _drop_on_results(_at_position: Vector2, data: Variant) -> void:
 func _refresh_deck_options(select_name := "") -> void:
 	_deck_option.clear()
 	_deck_option.add_item(NEW_DECK_TEXT)
+	_deck_option.add_item(IMPORT_DECK_TEXT)
 	var names := deck_library.list_names()
 	for deck_name in names:
 		_deck_option.add_item(deck_name)
-	_deck_option.select(names.find(select_name) + 1)
+	var saved_at := names.find(select_name)
+	_open_option = NEW_DECK_INDEX if saved_at == -1 else saved_at + FIRST_SAVED_DECK_INDEX
+	_deck_option.select(_open_option)
 
 
 func _on_deck_option_selected(index: int) -> void:
-	if index == 0:
+	if index == IMPORT_DECK_INDEX:
+		# Importing is an action, not a deck: the picker goes back to the deck that is open.
+		_deck_option.select(_open_option)
+		_deck_dialog.popup_centered_ratio(0.7)
+		return
+	_open_option = index
+	if index == NEW_DECK_INDEX:
 		_set_deck(DeckData.new())
 		return
 	var deck_name := _deck_option.get_item_text(index)
@@ -312,6 +334,24 @@ func _set_deck(deck: DeckData) -> void:
 	_name_edit.text = deck.deck_name
 	_show_status("", STATUS_COLOR)
 	_refresh_deck()
+
+
+## Opens a deck from a file as a new, unsaved deck. It is only kept once it is saved, so importing
+## never replaces a saved deck by itself.
+func _import_deck(path: String) -> void:
+	var deck := deck_library.read_file(path)
+	if deck == null:
+		_show_status("“%s” is not a deck." % path.get_file(), ERROR_COLOR)
+		return
+	var deck_name := deck.deck_name.strip_edges()
+	_refresh_deck_options()
+	_set_deck(deck)
+	if deck_name.is_empty():
+		_show_status("Imported the deck. Give it a name and save it to keep it.", SUCCESS_COLOR)
+	elif deck_library.list_names().has(deck_name):
+		_show_status("Imported “%s”. Saving it replaces your deck with that name." % deck_name, SUCCESS_COLOR)
+	else:
+		_show_status("Imported “%s”. Save it to keep it." % deck_name, SUCCESS_COLOR)
 
 
 func _save_deck() -> void:
@@ -332,7 +372,7 @@ func _save_deck() -> void:
 
 
 func _delete_deck() -> void:
-	if _deck_option.selected == 0:
+	if _deck_option.selected < FIRST_SAVED_DECK_INDEX:
 		_show_status("Pick a saved deck to delete it.", ERROR_COLOR)
 		return
 	var deck_name := _deck_option.get_item_text(_deck_option.selected)
@@ -367,9 +407,8 @@ func _show_details(card_id: String) -> void:
 		return
 	var text := "[font_size=22][color=#f2cc73]%s[/color][/font_size]\n" % _escape(card.card_name)
 	text += "[color=#9ea3bd]%s[/color]\n" % _escape(card.type_line())
-	var points := (
-		str(points_list.points_for(card)) if points_list.has_card(card) else "0 (not on the points list)"
-	)
+	var cost := points_list.points_for(card)
+	var points := str(cost) if points_list.has_card(card) else "%d (not on the points list)" % cost
 	text += "Time cost %d   ·   Points %s\n" % [card.time_cost, points]
 	if card.has_stats():
 		text += "Attack %d   ·   Defense %d\n" % [card.attack, card.defense]

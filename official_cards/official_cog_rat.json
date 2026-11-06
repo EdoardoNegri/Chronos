@@ -1,0 +1,11 @@
+{
+	"attack": 1,
+	"card_name": "Cog Rat",
+	"card_type": "Creature",
+	"defense": 1,
+	"id": "official_cog_rat",
+	"points": 1,
+	"rules_text": "Small, fast and everywhere.",
+	"subtype": "Beast",
+	"time_cost": 5
+}

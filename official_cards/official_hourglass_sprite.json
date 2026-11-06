@@ -1,0 +1,11 @@
+{
+	"attack": 1,
+	"card_name": "Hourglass Sprite",
+	"card_type": "Creature",
+	"defense": 2,
+	"id": "official_hourglass_sprite",
+	"points": 1,
+	"rules_text": "When this enters, draw a card.",
+	"subtype": "Fairy",
+	"time_cost": 10
+}

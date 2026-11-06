@@ -67,6 +67,50 @@ layout_mode = 2
 size_flags_horizontal = 0
 text = "Fullscreen"
 
+[node name="OnlineLabel" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Online"
+
+[node name="NameHint" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 16
+text = "Your name, shown to the players you meet online. No email needed."
+
+[node name="NameEdit" type="LineEdit" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(360, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+placeholder_text = "Not set yet: you pick one when you go online"
+max_length = 20
+
+[node name="NameStatus" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+
+[node name="ServerHint" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 16
+text = "Server: where the rooms are. To play with someone, one of you runs the server and you both type its address here."
+
+[node name="ServerEdit" type="LineEdit" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(520, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+placeholder_text = "e.g. wss://something.trycloudflare.com or 192.168.0.5:9080"
+
+[node name="ServerStatus" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+
 [node name="BackButton" type="Button" parent="."]
 unique_name_in_owner = true
 layout_mode = 1

@@ -5,6 +5,9 @@ extends RefCounted
 ## half size, used for thumbnails).
 
 const DEFAULT_DIRECTORY := "user://cards"
+## The official cards that come with the game, in the same format. The player's own library
+## (DEFAULT_DIRECTORY) holds the custom cards: the ones they created or imported.
+const OFFICIAL_DIRECTORY := "res://official_cards"
 const FACE_SIZE := Vector2i(375, 525)
 
 var directory: String

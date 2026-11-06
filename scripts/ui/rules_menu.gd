@@ -4,8 +4,11 @@ extends Control
 ##
 ## The search bar filters the rulebook in place: a sub-rule stays only if its number, title or
 ## text contains every word searched for (ignoring case), and a section with none left is hidden.
-## Words can be anywhere, in any order; words in quotes ("deck has") must appear as that phrase.
-## A section whose own title matches keeps all its sub-rules. Matching words are shown in gold.
+## Words can be anywhere, in any order, and match inside longer words: you also finds "your".
+## Spaces outside quotes only separate words. Text in quotes ("deck has") must appear exactly as
+## typed, spaces included: "your p" finds "your points", and "you " finds "you" but not "your".
+## Every search field works this way (see SearchText).
+## A section whose own title matches keeps all its sub-rules. Matches are shown in gold.
 ## The back arrow (or Escape) clears the search first, then goes to the main menu.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -15,7 +18,6 @@ const BODY := Color(0.92, 0.9, 0.85)
 const ALT_COLOR := Color(0.45, 0.78, 0.88)
 const IDEA_COLOR := Color(0.74, 0.64, 0.95)
 const SECTION_PADDING := 20
-const QUOTE := "\""
 
 ## The rulebook as built, for the search. Each section: "number", "title", "control" and "rules";
 ## each rule: "number" ("2.4" or "Idea"), "title", "text", "control" and "body" (its text label).
@@ -31,7 +33,7 @@ var _sections: Array[Dictionary] = []
 func _ready() -> void:
 	_back_button.pressed.connect(_go_back)
 	_search_edit.text_changed.connect(func(_text: String) -> void: _apply_search())
-	_search_edit.gui_input.connect(_pair_quotes)
+	_search_edit.gui_input.connect(SearchText.pair_quotes.bind(_search_edit))
 	for i in GameRules.SECTIONS.size():
 		_rule_list.add_child(_build_section(i + 1, GameRules.SECTIONS[i]))
 	_apply_search()
@@ -123,70 +125,30 @@ func _add_rule(
 ## The sections and sub-rules whose own number, title or text contain every word of the query,
 ## in reading order. Empty for an empty query.
 func search(query: String) -> Array[Dictionary]:
-	var words := _words(query)
+	var terms := _words(query)
 	var found: Array[Dictionary] = []
-	if words.is_empty():
+	if terms.is_empty():
 		return found
 	for section in _sections:
-		if _matches(section, words):
+		if _matches(section, terms):
 			found.append(section)
 		for rule: Dictionary in section["rules"]:
-			if _matches(rule, words):
+			if _matches(rule, terms):
 				found.append(rule)
 	return found
 
 
-## Quotes in the search bar come in pairs: typing " puts in both with the caret between them (or
-## puts them around the selected text). Typing " right before the closing one steps over it, and
-## backspace between an empty pair removes both.
-func _pair_quotes(event: InputEvent) -> void:
-	var key := event as InputEventKey
-	if key == null or not key.pressed:
-		return
-	var text := _search_edit.text
-	var caret := _search_edit.caret_column
-	var inside_phrase := text.left(caret).count("\"") % 2 == 1
-	if key.unicode == QUOTE.unicode_at(0):
-		if _search_edit.has_selection():
-			var from := _search_edit.get_selection_from_column()
-			var to := _search_edit.get_selection_to_column()
-			_search_edit.deselect()
-			_set_search(text.left(from) + QUOTE + text.substr(from, to - from) + QUOTE + text.substr(to), to + 2)
-		elif inside_phrase and text.substr(caret, 1) == QUOTE:
-			_search_edit.caret_column = caret + 1
-		else:
-			_set_search(text.left(caret) + QUOTE + QUOTE + text.substr(caret), caret + 1)
-		_search_edit.accept_event()
-	elif (
-		key.keycode == KEY_BACKSPACE
-		and not (key.ctrl_pressed or key.alt_pressed or key.meta_pressed)
-		and not _search_edit.has_selection()
-		and caret > 0
-		and text.substr(caret - 1, 2) == QUOTE + QUOTE
-		and inside_phrase
-	):
-		_set_search(text.left(caret - 1) + text.substr(caret + 1), caret - 1)
-		_search_edit.accept_event()
-
-
-## Changes the search text from code (which LineEdit does not report) and filters by it.
-func _set_search(text: String, caret: int) -> void:
-	_search_edit.text = text
-	_search_edit.caret_column = caret
-	_apply_search()
-
-
 ## Shows only what the search bar matches (everything when it is empty), from the top.
 func _apply_search() -> void:
-	var words := _words(_search_edit.text)
+	var terms := _words(_search_edit.text)
 	var anything_shown := false
 	for section in _sections:
-		var keep_all := words.is_empty() or _matches(section, words)
+		var keep_all := terms.is_empty() or _matches(section, terms)
 		var shown := 0
 		for rule: Dictionary in section["rules"]:
-			var keep := keep_all or _matches(rule, words)
+			var keep := keep_all or _matches(rule, terms)
 			(rule["control"] as Control).visible = keep
-			(rule["body"] as RichTextLabel).text = _rule_bbcode(rule["text"], words)
+			(rule["body"] as RichTextLabel).text = _rule_bbcode(rule["text"], terms)
 			if keep:
 				shown += 1
 		(section["control"] as Control).visible = shown > 0
@@ -196,27 +158,14 @@ func _apply_search() -> void:
 	_rules_scroll.scroll_vertical = 0
 
 
-func _matches(entry: Dictionary, words: PackedStringArray) -> bool:
+func _matches(entry: Dictionary, terms: PackedStringArray) -> bool:
 	var haystack := _plain("%s %s %s" % [entry["number"], entry["title"], entry.get("text", "")])
-	for word in words:
-		if not haystack.contains(word):
-			return false
-	return true
+	return SearchText.contains_all(haystack, terms)
 
 
-## What a search looks for: each loose word on its own, and each "quoted phrase" as a whole, in
-## that exact order. A quote not yet closed runs to the end, so results narrow while typing.
+## What a search looks for, as every search field reads it (see SearchText).
 static func _words(query: String) -> PackedStringArray:
-	var terms := PackedStringArray()
-	var parts := _plain(query.replace("“", "\"").replace("”", "\"")).split("\"")
-	for i in parts.size():
-		if i % 2 == 1:
-			var phrase := parts[i].strip_edges()
-			if not phrase.is_empty():
-				terms.append(phrase)
-		else:
-			terms.append_array(parts[i].split(" ", false))
-	return terms
+	return SearchText.words(_plain(query))
 
 
 ## Lower case on one line, with {notes} as "(notes)" the way the rulebook shows them. Keeps the
@@ -226,17 +175,17 @@ static func _plain(text: String) -> String:
 
 
 ## The rule text as BBCode: each {note} as a blue "(note)", and the searched words in gold.
-func _rule_bbcode(text: String, words: PackedStringArray) -> String:
+func _rule_bbcode(text: String, terms: PackedStringArray) -> String:
 	var lower := _plain(text)
 	var hit: Array[bool] = []
 	hit.resize(text.length())
 	hit.fill(false)
-	for word in words:
-		var at := lower.find(word)
+	for term in terms:
+		var at := lower.find(term)
 		while at != -1:
-			for i in range(at, at + word.length()):
+			for i in range(at, at + term.length()):
 				hit[i] = true
-			at = lower.find(word, at + word.length())
+			at = lower.find(term, at + term.length())
 
 	var draft_tag := "[color=#%s]" % ALT_COLOR.to_html(false)
 	var hit_tag := "[color=#%s]" % GOLD.to_html(false)

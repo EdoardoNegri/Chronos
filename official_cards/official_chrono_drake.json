@@ -1,0 +1,11 @@
+{
+	"attack": 3,
+	"card_name": "Chrono Drake",
+	"card_type": "Creature",
+	"defense": 4,
+	"id": "official_chrono_drake",
+	"points": 3,
+	"rules_text": "When this enters, draw a card.",
+	"subtype": "Dragon",
+	"time_cost": 30
+}

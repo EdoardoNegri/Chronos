@@ -45,7 +45,7 @@ theme_override_constants/separation = 18
 [node name="SearchEdit" type="LineEdit" parent="Content/Layout"]
 unique_name_in_owner = true
 layout_mode = 2
-placeholder_text = "Search the rules (put words in \"quotes\" for an exact phrase)"
+placeholder_text = "Search the rules (put text in \"quotes\" to match it exactly, spaces included)"
 clear_button_enabled = true
 
 [node name="RulesScroll" type="ScrollContainer" parent="Content/Layout"]

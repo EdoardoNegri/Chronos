@@ -145,6 +145,29 @@ func test_rules_search_quotes_mean_an_exact_phrase() -> void:
 	assert_has(_titles(scene.search("\"deck ha")), "Minimum size", "an unclosed quote runs to the end")
 
 
+func test_rules_search_counts_spaces_only_inside_quotes() -> void:
+	var scene: Control = load("res://scenes/rules.tscn").instantiate()
+	add_child_autofree(scene)
+	# "Free cards with a catch" says "your opponent" but never the word "you" on its own, and
+	# "Point budget" says "your points".
+	var loose := _titles(scene.search("you"))
+	assert_has(loose, "Free cards with a catch", "a loose word also matches inside longer words")
+	assert_has(loose, "Point budget")
+
+	var with_space := _titles(scene.search("\"you \""))
+	assert_has(with_space, "Point budget", "\"you \" finds the word you")
+	assert_does_not_have(with_space, "Free cards with a catch", "the space keeps \"your\" out")
+	assert_eq(_titles(scene.search("\"YOU \"")), with_space, "quoted text still ignores case")
+
+	var partial := _titles(scene.search("\"your p\""))
+	assert_has(partial, "Point budget", "\"your p\" finds \"your points\"")
+	assert_does_not_have(partial, "Free cards with a catch")
+	assert_eq(scene.search("\"your  p\"").size(), 0, "two spaces in quotes are two spaces")
+
+	assert_eq(_titles(scene.search("  you   ")), loose, "spaces outside quotes are ignored")
+	assert_has(_titles(scene.search("\"your p")), "Point budget", "an unclosed quote runs to the end")
+
+
 func _press(edit: LineEdit, keycode: Key, unicode := 0) -> void:
 	var key := InputEventKey.new()
 	key.pressed = true

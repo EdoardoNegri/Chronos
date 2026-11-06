@@ -5,6 +5,8 @@ extends RefCounted
 ##   dragon              the name contains "dragon"
 ##   "chrono drake"      the name contains the phrase
 ##   t:creature          the type or subtype contains "creature"   (also type:)
+##   ct:creature         the card type alone contains "creature"   (also cardtype:)
+##   st:elf              the subtype alone contains "elf"          (also subtype:)
 ##   o:draw              the card text contains "draw"            (also text:, o:"draw a card")
 ##   time>=30            time cost; also : = != < <= > >=          (also cost:)
 ##   atk>2  def<=3       attack and defense; only creatures match  (also pow:, tou:, life:)
@@ -20,6 +22,10 @@ const TEXT_FIELDS := {
 	"n": "name",
 	"t": "type",
 	"type": "type",
+	"ct": "cardtype",
+	"cardtype": "cardtype",
+	"st": "subtype",
+	"subtype": "subtype",
 	"o": "text",
 	"text": "text",
 	"oracle": "text",
@@ -43,6 +49,8 @@ const NUMBER_FIELDS := {
 const FIELD_NAMES := {
 	"name": "the name",
 	"type": "the type",
+	"cardtype": "the card type",
+	"subtype": "the subtype",
 	"text": "the text",
 	"time": "time cost",
 	"attack": "attack",
@@ -180,6 +188,10 @@ func _term_matches(term: Dictionary, card: CardData) -> bool:
 			return card.card_name.to_lower().contains(term["value"])
 		"type":
 			return card.type_line().to_lower().contains(term["value"])
+		"cardtype":
+			return card.card_type.to_lower().contains(term["value"])
+		"subtype":
+			return card.subtype.to_lower().contains(term["value"])
 		"text":
 			return card.rules_text.to_lower().contains(term["value"])
 	var number := 0

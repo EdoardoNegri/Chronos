@@ -5,6 +5,7 @@
 [ext_resource type="Theme" path="res://assets/themes/menu_theme.tres" id="3_theme"]
 [ext_resource type="Script" path="res://scripts/ui/back_arrow.gd" id="9_back"]
 [ext_resource type="Script" path="res://scripts/ui/settings_button.gd" id="11_settings"]
+[ext_resource type="PackedScene" path="res://scenes/card_search_form.tscn" id="12_form"]
 
 [node name="Decks" type="Control"]
 layout_mode = 3
@@ -41,30 +42,6 @@ theme_override_constants/margin_bottom = 24
 [node name="Layout" type="VBoxContainer" parent="Content"]
 layout_mode = 2
 theme_override_constants/separation = 12
-
-[node name="Header" type="HBoxContainer" parent="Content/Layout"]
-layout_mode = 2
-
-[node name="HeaderSpacer" type="Control" parent="Content/Layout/Header"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-
-[node name="HeaderActions" type="HBoxContainer" parent="Content/Layout/Header"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="ImportCardsButton" type="Button" parent="Content/Layout/Header/HeaderActions"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Add cards other players sent you (PNGs made with Download PNG)."
-text = "Import cards..."
-
-[node name="ImportPointsButton" type="Button" parent="Content/Layout/Header/HeaderActions"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Load the points list that sets what each card costs."
-text = "Import points list..."
 
 [node name="Body" type="HBoxContainer" parent="Content/Layout"]
 layout_mode = 2
@@ -207,6 +184,7 @@ theme_type_variation = &"PrimaryButton"
 text = "Save"
 
 [node name="SearchPanel" type="PanelContainer" parent="Content/Layout/Body"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"Card"
@@ -233,9 +211,37 @@ size_flags_horizontal = 3
 placeholder_text = "Search..."
 clear_button_enabled = true
 
-[node name="TypeFilter" type="OptionButton" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/SearchRow"]
+[node name="FiltersButton" type="Button" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/SearchRow"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Search by name, type, subtype, card text and numbers, like in the database."
+toggle_mode = true
+text = "Filters"
+
+[node name="FiltersScroll" type="ScrollContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 0
+horizontal_scroll_mode = 0
+
+[node name="FiltersPadding" type="MarginContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/FiltersScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_right = 12
+
+[node name="FiltersColumn" type="VBoxContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/FiltersScroll/FiltersPadding"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SearchForm" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/FiltersScroll/FiltersPadding/FiltersColumn" instance=ExtResource("12_form")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ClearFiltersButton" type="Button" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/FiltersScroll/FiltersPadding/FiltersColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Clear filters"
 
 [node name="ResultCount" type="Label" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn"]
 unique_name_in_owner = true
