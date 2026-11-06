@@ -131,7 +131,7 @@ func test_database_starts_on_the_form_and_searches_from_it() -> void:
 	(scene.get_node("%SearchButton") as Button).pressed.emit()
 
 	assert_true((scene.get_node("%ResultsPanel") as Control).visible)
-	assert_false((scene.get_node("%Header") as Control).visible, "Clear and Search are only on the form")
+	assert_false((scene.get_node("%Actions") as Control).visible, "Clear and Search are only on the form")
 	assert_eq(scene._results.size(), 1)
 	assert_eq(scene._results[0].card_name, "Chrono Drake")
 

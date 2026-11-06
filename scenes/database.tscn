@@ -40,33 +40,7 @@ theme_override_constants/margin_bottom = 24
 
 [node name="Layout" type="VBoxContainer" parent="Content"]
 layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="Header" type="HBoxContainer" parent="Content/Layout"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 14
-
-[node name="HeaderSpacer" type="Control" parent="Content/Layout/Header"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-
-[node name="ClearButton" type="Button" parent="Content/Layout/Header"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 0)
-layout_mode = 2
-size_flags_vertical = 4
-tooltip_text = "Empty the form and the search bar."
-text = "Clear"
-
-[node name="SearchButton" type="Button" parent="Content/Layout/Header"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 0)
-layout_mode = 2
-size_flags_vertical = 4
-theme_type_variation = &"PrimaryButton"
-text = "Search"
+theme_override_constants/separation = 12
 
 [node name="FormPanel" type="PanelContainer" parent="Content/Layout"]
 unique_name_in_owner = true
@@ -207,6 +181,25 @@ text = "Order"
 [node name="OrderOption" type="OptionButton" parent="Content/Layout/FormPanel/FormMargin/FormScroll/FormPadding/Form/DisplayRow/OrderField"]
 unique_name_in_owner = true
 layout_mode = 2
+
+[node name="Actions" type="HBoxContainer" parent="Content/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ClearButton" type="Button" parent="Content/Layout/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Empty the form."
+text = "Clear"
+
+[node name="SearchButton" type="Button" parent="Content/Layout/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "Search"
 
 [node name="ResultsPanel" type="PanelContainer" parent="Content/Layout"]
 unique_name_in_owner = true

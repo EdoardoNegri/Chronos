@@ -42,27 +42,41 @@ theme_override_constants/margin_bottom = 24
 layout_mode = 2
 theme_override_constants/separation = 18
 
-[node name="ListPanel" type="PanelContainer" parent="Content/Layout"]
+[node name="SearchEdit" type="LineEdit" parent="Content/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Search the rules (put words in \"quotes\" for an exact phrase)"
+clear_button_enabled = true
+
+[node name="RulesScroll" type="ScrollContainer" parent="Content/Layout"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
-theme_type_variation = &"Card"
-
-[node name="ListMargin" type="MarginContainer" parent="Content/Layout/ListPanel"]
-layout_mode = 2
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 16
-
-[node name="Scroll" type="ScrollContainer" parent="Content/Layout/ListPanel/ListMargin"]
-layout_mode = 2
 horizontal_scroll_mode = 0
 
-[node name="RuleList" type="VBoxContainer" parent="Content/Layout/ListPanel/ListMargin/Scroll"]
+[node name="RulesPadding" type="MarginContainer" parent="Content/Layout/RulesScroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
+
+[node name="RuleList" type="VBoxContainer" parent="Content/Layout/RulesScroll/RulesPadding"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 32
+
+[node name="NoResultsLabel" type="Label" parent="Content/Layout"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+text = "No rules match this search."
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="BackButton" type="Button" parent="."]
 unique_name_in_owner = true

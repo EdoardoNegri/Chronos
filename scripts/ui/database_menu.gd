@@ -58,7 +58,7 @@ var _flow_item_ratio := 0.0
 var _number_filters: Array[Dictionary] = []
 
 @onready var _back_button: Button = %BackButton
-@onready var _header: Control = %Header
+@onready var _actions: Control = %Actions
 @onready var _clear_button: Button = %ClearButton
 @onready var _search_button: Button = %SearchButton
 @onready var _mode_option: OptionButton = %ModeOption
@@ -136,8 +136,8 @@ func _load_library() -> void:
 ## Shows one page: "form", "results" or "detail".
 func _show_page(page: String) -> void:
 	_page = page
-	# Clear and Search belong to the form; the other pages start right at the top.
-	_header.visible = page == "form"
+	# Clear and Search sit under the form and belong to it.
+	_actions.visible = page == "form"
 	_form_panel.visible = page == "form"
 	_results_panel.visible = page == "results"
 	_detail_panel.visible = page == "detail"
