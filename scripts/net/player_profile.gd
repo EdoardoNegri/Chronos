@@ -1,9 +1,8 @@
 class_name PlayerProfile
 extends Node
 ## Who the player is when they play online: just a name. There is no email and no password, so the
-## first time they go online they only pick a name, and they can change it in the settings. The
-## profile also remembers which lobby server to use. It is kept in a small file, so it is still
-## there the next time the game starts.
+## first time they go online they only pick a name, and they can change it in the settings. It is
+## kept in a small file, so it is still there the next time the game starts.
 ##
 ## Registered as the `Profile` autoload.
 
@@ -11,16 +10,10 @@ signal name_changed(new_name: String)
 
 const DEFAULT_PATH := "user://profile.cfg"
 const MAX_NAME_LENGTH := 20
-## An optional shared server to list rooms from. There is none by default: rooms are hosted by the
-## players themselves and joined with an invite link, so nobody has to set a server up.
-const DEFAULT_SERVER_URL := ""
 
 var path: String
 ## Empty until the player has picked a name (that is, has no account yet).
 var player_name := ""
-var server_url := DEFAULT_SERVER_URL
-## Whether the game has already made its one-time offer to open invite links (see LinkHandler).
-var links_setup_done := false
 
 var _file := ConfigFile.new()
 
@@ -29,10 +22,6 @@ func _init(profile_path: String = DEFAULT_PATH) -> void:
 	path = profile_path
 	if _file.load(path) == OK:
 		player_name = str(_file.get_value("profile", "name", "")).strip_edges()
-		var saved_server := str(_file.get_value("online", "server", "")).strip_edges()
-		if not saved_server.is_empty():
-			server_url = saved_server
-		links_setup_done = bool(_file.get_value("online", "links_setup_done", false))
 
 
 ## Whether the player has picked a name yet.
@@ -65,26 +54,6 @@ func set_player_name(new_name: String) -> String:
 		player_name = trimmed
 		name_changed.emit(player_name)
 	return ""
-
-
-## Sets the address of the lobby server and keeps it. Empty goes back to the default. Returns an
-## error message, or an empty string.
-func set_server_url(new_url: String) -> String:
-	var trimmed := new_url.strip_edges()
-	if trimmed.is_empty():
-		trimmed = DEFAULT_SERVER_URL
-	_file.set_value("online", "server", trimmed)
-	var error := _save()
-	if error.is_empty():
-		server_url = trimmed
-	return error
-
-
-## Remembers that the one-time offer to open invite links has been made, so it is not made again.
-func mark_links_setup_done() -> void:
-	_file.set_value("online", "links_setup_done", true)
-	if _save().is_empty():
-		links_setup_done = true
 
 
 func _save() -> String:

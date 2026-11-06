@@ -108,60 +108,7 @@ func test_settings_before_there_is_a_name_does_not_nag() -> void:
 	assert_eq(settings.profile.player_name, "Nova")
 
 
-func test_settings_lets_the_player_choose_the_server() -> void:
+func test_settings_has_no_server_or_link_options() -> void:
 	var settings := _open_settings("Aeon")
-	var edit: LineEdit = settings.get_node("%ServerEdit")
-	var status: Label = settings.get_node("%ServerStatus")
-	assert_eq(edit.text, PlayerProfile.DEFAULT_SERVER_URL, "it starts on this computer")
-	edit.text = "  abc.trycloudflare.com  "
-	edit.text_submitted.emit(edit.text)
-	assert_eq(settings.profile.server_url, "abc.trycloudflare.com")
-	assert_eq(edit.text, "abc.trycloudflare.com")
-	assert_string_contains(status.text, "Saved")
-	assert_eq(autofree(PlayerProfile.new(TEST_PROFILE_PATH)).server_url, "abc.trycloudflare.com", "and it is kept")
-
-	edit.text = ""
-	edit.text_submitted.emit("")
-	assert_eq(settings.profile.server_url, PlayerProfile.DEFAULT_SERVER_URL, "an empty address goes back to this computer")
-	assert_eq(edit.text, PlayerProfile.DEFAULT_SERVER_URL)
-
-	edit.text = "wss://typed.example"
-	settings.close()
-	assert_eq(settings.profile.server_url, "wss://typed.example", "an address typed but not confirmed still counts")
-
-
-## Stands in for the real link setup, which would change the registry.
-class FakeLinks:
-	extends LinkHandler
-	var registered := false
-
-	func is_supported() -> bool:
-		return true
-
-	func is_registered() -> bool:
-		return registered
-
-	func register() -> Error:
-		registered = true
-		return OK
-
-	func unregister() -> Error:
-		registered = false
-		return OK
-
-
-func test_settings_can_turn_invite_links_on_and_off() -> void:
-	var fake := FakeLinks.new()
-	var profile: PlayerProfile = autofree(PlayerProfile.new(TEST_PROFILE_PATH))
-	var settings: Control = load("res://scenes/settings.tscn").instantiate()
-	settings.profile = profile
-	settings.links = fake
-	add_child_autofree(settings)
-	var check: CheckButton = settings.get_node("%LinksCheck")
-	assert_true(check.visible)
-	assert_false(check.button_pressed, "links are off until the player turns them on")
-	check.button_pressed = true
-	assert_true(fake.registered)
-	assert_string_contains((settings.get_node("%LinksStatus") as Label).text, "On")
-	check.button_pressed = false
-	assert_false(fake.registered)
+	assert_null(settings.get_node_or_null("%ServerEdit"), "rooms are listed without a server to set")
+	assert_null(settings.get_node_or_null("%LinksCheck"), "and joined from the list, not with links")

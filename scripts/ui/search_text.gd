@@ -36,6 +36,27 @@ static func words(query: String) -> PackedStringArray:
 	return found
 
 
+## What has to be found, made quick to look for: words found inside another word are left out
+## ("you" when "your" is searched for: whatever holds "your" holds "you"), and the rest come
+## longest first, since they rule out most. Use it with contains_all.
+static func needles(query: String) -> PackedStringArray:
+	var unique: Array[String] = []
+	for word in words(query):
+		if not unique.has(word):
+			unique.append(word)
+	unique.sort_custom(func(a: String, b: String) -> bool: return a.length() > b.length())
+	var found := PackedStringArray()
+	for word in unique:
+		var inside_another := false
+		for kept in found:
+			if kept.contains(word):
+				inside_another = true
+				break
+		if not inside_another:
+			found.append(word)
+	return found
+
+
 ## Whether every word is in `haystack`, which must already be lower case.
 static func contains_all(haystack: String, wanted: PackedStringArray) -> bool:
 	for word in wanted:

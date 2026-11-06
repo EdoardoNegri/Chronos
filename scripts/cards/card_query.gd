@@ -58,6 +58,12 @@ const FIELD_NAMES := {
 	"points": "points",
 }
 const OPERATOR_SYMBOLS := {"=": "=", "!=": "≠", "<": "<", "<=": "≤", ">": ">", ">=": "≥"}
+## How much work it is to check a term on a field: numbers are quick, text takes longer the longer
+## the field. Terms are tried cheapest first, so a card that fails is found out quickly.
+const FIELD_COST := {
+	"time": 0, "attack": 0, "defense": 0, "points": 1,
+	"cardtype": 2, "subtype": 2, "name": 3, "type": 4, "text": 5,
+}
 const QUOTES := ["\"", "“", "”"]
 
 static var _term_pattern := RegEx.create_from_string("^([A-Za-z]+)(>=|<=|!=|>|<|=|:)(.*)$")
@@ -65,8 +71,10 @@ static var _term_pattern := RegEx.create_from_string("^([A-Za-z]+)(>=|<=|!=|>|<|
 ## Problems found while reading the search, for showing to the player.
 var warnings: Array[String] = []
 
-## Alternatives separated by "or". Each is a list of terms that must all match.
+## Alternatives separated by "or". Each is a list of terms that must all match, as typed (for
+## describe), and the same terms in the order they are tried (see FIELD_COST).
 var _alternatives: Array[Array] = []
+var _tried: Array[Array] = []
 var _points_list: PointsList
 
 
@@ -85,6 +93,10 @@ static func parse(text: String, points_list: PointsList = null) -> CardQuery:
 			terms.append(term)
 	if not terms.is_empty():
 		query._alternatives.append(terms)
+	for alternative in query._alternatives:
+		var ordered := alternative.duplicate()
+		ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return FIELD_COST[a["field"]] < FIELD_COST[b["field"]])
+		query._tried.append(ordered)
 	return query
 
 
@@ -93,17 +105,26 @@ func is_empty() -> bool:
 
 
 func matches(card: CardData) -> bool:
-	if _alternatives.is_empty():
+	if _tried.is_empty():
 		return true
-	for terms in _alternatives:
+	# The card's text fields in lower case, made the first time a term needs them.
+	var lowered := {}
+	for terms in _tried:
 		var all_match := true
 		for term: Dictionary in terms:
-			if _term_matches(term, card) == term["negate"]:
+			if _term_matches(term, card, lowered) == term["negate"]:
 				all_match = false
 				break
 		if all_match:
 			return true
 	return false
+
+
+## The cards that match, in the order given.
+func filter(cards: Array[CardData]) -> Array[CardData]:
+	if _tried.is_empty():
+		return cards.duplicate()
+	return cards.filter(matches)
 
 
 ## The search in words, e.g. 'the type includes “creature” and time cost ≥ 30'.
@@ -181,19 +202,12 @@ func _parse_term(token: Dictionary) -> Dictionary:
 	return {}
 
 
-func _term_matches(term: Dictionary, card: CardData) -> bool:
+func _term_matches(term: Dictionary, card: CardData, lowered: Dictionary) -> bool:
 	var field: String = term["field"]
-	match field:
-		"name":
-			return card.card_name.to_lower().contains(term["value"])
-		"type":
-			return card.type_line().to_lower().contains(term["value"])
-		"cardtype":
-			return card.card_type.to_lower().contains(term["value"])
-		"subtype":
-			return card.subtype.to_lower().contains(term["value"])
-		"text":
-			return card.rules_text.to_lower().contains(term["value"])
+	if FIELD_COST[field] >= FIELD_COST["cardtype"]:
+		if not lowered.has(field):
+			lowered[field] = _field_text(card, field).to_lower()
+		return (lowered[field] as String).contains(term["value"])
 	var number := 0
 	match field:
 		"time":
@@ -205,6 +219,19 @@ func _term_matches(term: Dictionary, card: CardData) -> bool:
 		"points":
 			number = _points_list.points_for(card) if _points_list != null else 0
 	return _compare(number, term["op"], term["value"])
+
+
+static func _field_text(card: CardData, field: String) -> String:
+	match field:
+		"name":
+			return card.card_name
+		"type":
+			return card.type_line()
+		"cardtype":
+			return card.card_type
+		"subtype":
+			return card.subtype
+	return card.rules_text
 
 
 static func _compare(number: int, operator: String, value: int) -> bool:

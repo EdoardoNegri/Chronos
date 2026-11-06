@@ -92,38 +92,6 @@ custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 
-[node name="ServerHint" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
-theme_override_font_sizes/font_size = 16
-text = "Shared server (optional): lists open rooms, so you can join one with a click. You do not need it to play with a friend: host a room and send them the invite link."
-
-[node name="ServerEdit" type="LineEdit" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(520, 0)
-layout_mode = 2
-size_flags_horizontal = 0
-placeholder_text = "Leave empty if you have none"
-
-[node name="ServerStatus" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
-
-[node name="LinksCheck" type="CheckButton" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 0
-tooltip_text = "Lets a friend's invite link start this game and take you into their room."
-text = "Open invite links with this game"
-
-[node name="LinksStatus" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/Options"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
-
 [node name="BackButton" type="Button" parent="."]
 unique_name_in_owner = true
 layout_mode = 1

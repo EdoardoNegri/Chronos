@@ -3,8 +3,25 @@ extends GutTest
 var _dir: RoomDirectory
 
 
+## A directory with a few example rooms: some open, one full, one in a game, two with the
+## password "time".
 func before_each() -> void:
-	_dir = RoomDirectory.with_examples()
+	_dir = RoomDirectory.new()
+	# Name, host, players in it, in a game, custom cards, password.
+	var seeds := [
+		["Temporal Rift", "Aeon", 1, false, false, ""],
+		["Midnight Duel", "Kairos", 2, true, false, ""],
+		["Casual Hourglass", "Sandy", 1, false, true, ""],
+		["Beginners Welcome", "Tempus", 1, false, false, ""],
+		["Ranked Clash", "Vesper", 2, false, false, ""],
+		["Paradox Lounge", "Lyra", 1, false, true, "time"],
+		["Last Second", "Orion", 2, false, false, ""],
+		["Deck Testing", "Nyx", 1, false, true, "time"],
+	]
+	for example: Array in seeds:
+		var room := _dir.host_room(example[0], example[4], example[5], example[1])
+		room.players = example[2]
+		room.in_game = example[3]
 
 
 func test_starts_with_rooms_sorted_by_name() -> void:
@@ -187,8 +204,11 @@ func test_a_room_travels_as_a_snapshot_without_its_password() -> void:
 	assert_eq(copy.max_players, 2)
 
 	var others := RoomDirectory.new()
-	others.replace_from_snapshot(_dir.open_snapshot())
-	assert_eq(others.get_room_count(), _dir.get_room_count(true), "only open rooms are sent")
+	var snapshot: Array[Dictionary] = []
+	for open in _dir.get_rooms("", true):
+		snapshot.append(open.to_dict())
+	others.replace_from_snapshot(snapshot)
+	assert_eq(others.get_room_count(), _dir.get_room_count(true), "a list of rooms is made from a snapshot")
 	others.replace_from_snapshot([])
 	assert_eq(others.get_room_count(), 0, "a new snapshot replaces the old one")
 

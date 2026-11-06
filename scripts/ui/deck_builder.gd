@@ -35,6 +35,9 @@ var points_list := PointsList.new()
 
 var _cards: Array[CardData] = []
 var _cards_by_id: Dictionary[String, CardData] = {}
+## What the search box looks through for each card (id -> its name, subtype and text, in lower
+## case), made once when the library loads.
+var _haystacks: Dictionary[String, String] = {}
 var _textures: Dictionary[String, Texture2D] = {}
 var _deck := DeckData.new()
 var _selected_id := ""
@@ -130,9 +133,11 @@ func _load_library() -> void:
 	_cards = catalog.load_cards(false)
 	_filters_form.setup(_cards, catalog)
 	_cards_by_id.clear()
+	_haystacks.clear()
 	_textures.clear()
 	for card in _cards:
 		_cards_by_id[card.id] = card
+		_haystacks[card.id] = ("%s %s %s" % [card.card_name, card.subtype, card.rules_text]).to_lower()
 		var face := catalog.load_face(card.id)
 		if face != null:
 			face.generate_mipmaps()
@@ -189,7 +194,7 @@ func _on_filters_changed() -> void:
 func _refresh_results() -> void:
 	_clear_children(_result_grid)
 	_result_thumbs.clear()
-	var words := SearchText.words(_search_edit.text)
+	var words := SearchText.needles(_search_edit.text)
 	for card in _filters_form.search(_cards, points_list):
 		if not words.is_empty() and not _matches(card, words):
 			continue
@@ -211,8 +216,7 @@ func _refresh_results() -> void:
 
 ## Whether the card's name, subtype and text together hold every word searched for (see SearchText).
 func _matches(card: CardData, words: PackedStringArray) -> bool:
-	var haystack := "%s %s %s" % [card.card_name, card.subtype, card.rules_text]
-	return SearchText.contains_all(haystack.to_lower(), words)
+	return SearchText.contains_all(_haystacks.get(card.id, ""), words)
 
 
 func _update_badges() -> void:

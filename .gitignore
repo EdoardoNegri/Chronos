@@ -4,3 +4,6 @@
 
 # Exported builds
 /build/
+
+# The GitHub token for the room list (see scripts/net/room_board.gd). Never commit it.
+/secrets/

@@ -12,23 +12,9 @@ var profile: PlayerProfile = Profile
 @onready var _fullscreen_check: CheckButton = %FullscreenCheck
 @onready var _name_edit: LineEdit = %NameEdit
 @onready var _name_status: Label = %NameStatus
-@onready var _server_edit: LineEdit = %ServerEdit
-@onready var _server_status: Label = %ServerStatus
-@onready var _links_check: CheckButton = %LinksCheck
-@onready var _links_status: Label = %LinksStatus
-
-## Makes invite links open this game (Windows only). A test gives one for a made-up kind of link.
-var links := LinkHandler.new()
 
 
 func _ready() -> void:
-	_links_check.visible = links.is_supported()
-	_links_check.button_pressed = links.is_registered()
-	_links_check.toggled.connect(_set_links)
-	_server_edit.text = profile.server_url
-	_server_edit.text_submitted.connect(func(_text: String) -> void: _apply_server())
-	_server_edit.focus_exited.connect(_apply_server)
-	_server_edit.text_changed.connect(func(_text: String) -> void: _server_status.text = "")
 	_fullscreen_check.button_pressed = _is_fullscreen()
 	_fullscreen_check.toggled.connect(_set_fullscreen)
 	_name_edit.text = profile.player_name
@@ -45,45 +31,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func close() -> void:
-	# A name or address typed but not confirmed with Enter still counts.
+	# A name typed but not confirmed with Enter still counts.
 	_apply_name()
-	_apply_server()
 	queue_free()
-
-
-## Saves the server address typed in the field (empty goes back to this computer). The game
-## connects to it the next time the room list is opened or refreshed.
-func _apply_server() -> void:
-	var typed := _server_edit.text.strip_edges()
-	if typed == profile.server_url:
-		return
-	var error := profile.set_server_url(typed)
-	_server_edit.text = profile.server_url
-	if error.is_empty():
-		_show_server_status("Saved. Press Refresh in Play to connect.", SUCCESS_COLOR)
-	else:
-		_show_server_status(error, ERROR_COLOR)
-
-
-## Turns on or off opening invite links with this game.
-func _set_links(on: bool) -> void:
-	var error := links.register() if on else links.unregister()
-	if error == OK:
-		_show_links_status("On: invite links open this game." if on else "Off.", SUCCESS_COLOR)
-	else:
-		_show_links_status("Could not change this.", ERROR_COLOR)
-		# Show what is really so.
-		_links_check.set_pressed_no_signal(links.is_registered())
-
-
-func _show_links_status(text: String, color: Color) -> void:
-	_links_status.text = text
-	_links_status.add_theme_color_override("font_color", color)
-
-
-func _show_server_status(text: String, color: Color) -> void:
-	_server_status.text = text
-	_server_status.add_theme_color_override("font_color", color)
 
 
 ## Saves the name typed in the field. A name that cannot be used (empty, or too long) is not

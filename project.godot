@@ -19,7 +19,6 @@ config/icon="res://icon.svg"
 
 Profile="*res://scripts/net/player_profile.gd"
 Online="*res://scripts/net/lobby.gd"
-Invites="*res://scripts/net/invite_inbox.gd"
 
 [display]
 

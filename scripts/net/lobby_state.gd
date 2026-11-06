@@ -1,7 +1,9 @@
 class_name LobbyState
 extends RefCounted
-## What the lobby server knows: who is connected and under what name, and which room each of them
-## is in (as the host or as the second player). It holds no sockets, so it can be tested on its own;
+## What the lobby server knows: who is connected and under what name, which room each of them is
+## in (as the host or as the second player), and in their room, whether the deck they chose passed
+## the host's check and whether they are ready. When both players in a room are ready, the game
+## starts. It holds no sockets, so it can be tested on its own;
 ## the Lobby node does the talking.
 ##
 ## Players are told apart by their peer id. Each of them can be in one room at a time.
@@ -14,6 +16,9 @@ var _host_of: Dictionary[StringName, int] = {}
 var _guest_of: Dictionary[StringName, int] = {}
 ## Peer id -> the room that player is in.
 var _room_of: Dictionary[int, StringName] = {}
+## Peer ids of the players whose deck passed the check, and of those who are ready.
+var _deck_ok: Dictionary[int, bool] = {}
+var _ready: Dictionary[int, bool] = {}
 
 
 ## Remembers who a connected player is. Returns an error message, or an empty string.
@@ -31,13 +36,6 @@ func is_registered(peer: int) -> bool:
 
 func name_of(peer: int) -> String:
 	return _names.get(peer, "")
-
-
-## The peers of everyone who has said who they are.
-func registered_peers() -> Array[int]:
-	var peers: Array[int] = []
-	peers.assign(_names.keys())
-	return peers
 
 
 ## Opens a room hosted by this player. Gives {"room": RoomInfo} or {"error": message}.
@@ -70,6 +68,8 @@ func join(peer: int, room_id: StringName, password: String) -> Dictionary:
 		return {"error": error}
 	_guest_of[room_id] = peer
 	_room_of[peer] = room_id
+	# Someone new: everyone says again that they are ready.
+	_ready.erase(_host_of[room_id])
 	return {"room": directory.get_room(room_id), "host_peer": _host_of[room_id]}
 
 
@@ -81,6 +81,8 @@ func leave(peer: int) -> Dictionary:
 		return {}
 	var room_id := _room_of[peer]
 	_room_of.erase(peer)
+	_deck_ok.erase(peer)
+	_ready.erase(peer)
 	if _host_of.get(room_id, 0) == peer:
 		var guest: int = _guest_of.get(room_id, 0)
 		_host_of.erase(room_id)
@@ -90,6 +92,7 @@ func leave(peer: int) -> Dictionary:
 		return {"closed": true, "other": guest}
 	_guest_of.erase(room_id)
 	directory.leave_room(room_id)
+	_ready.erase(_host_of.get(room_id, 0))
 	return {"closed": false, "other": _host_of.get(room_id, 0)}
 
 
@@ -108,3 +111,54 @@ func opponent_of(peer: int) -> int:
 	if _host_of.get(room_id, 0) == peer:
 		return _guest_of.get(room_id, 0)
 	return _host_of.get(room_id, 0)
+
+
+## The room this player is in, or &"" if none.
+func room_of(peer: int) -> StringName:
+	return _room_of.get(peer, &"")
+
+
+## The players in a room: its host, then the second player if there is one.
+func players_in(room_id: StringName) -> Array[int]:
+	var players: Array[int] = []
+	if _host_of.has(room_id):
+		players.append(_host_of[room_id])
+	if _guest_of.has(room_id):
+		players.append(_guest_of[room_id])
+	return players
+
+
+## Records whether the deck this player chose passed the check. A deck that did not pass also
+## takes back their being ready.
+func set_deck_ok(peer: int, ok: bool) -> void:
+	if ok:
+		_deck_ok[peer] = true
+	else:
+		_deck_ok.erase(peer)
+		_ready.erase(peer)
+
+
+func deck_ok(peer: int) -> bool:
+	return _deck_ok.has(peer)
+
+
+## Says whether this player is ready. Only a player in a room whose deck passed the check can be.
+## Returns whether that is now so.
+func set_ready(peer: int, ready: bool) -> bool:
+	if ready and (not _room_of.has(peer) or not deck_ok(peer)):
+		return false
+	if ready:
+		_ready[peer] = true
+	else:
+		_ready.erase(peer)
+	return ready
+
+
+func is_ready(peer: int) -> bool:
+	return _ready.has(peer)
+
+
+## Whether a room has two players and both are ready.
+func both_ready(room_id: StringName) -> bool:
+	var players := players_in(room_id)
+	return players.size() == 2 and is_ready(players[0]) and is_ready(players[1])

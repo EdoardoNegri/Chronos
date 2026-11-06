@@ -51,21 +51,10 @@ func test_a_name_must_be_there_and_not_too_long() -> void:
 	assert_eq(profile.player_name, "Keeper", "and a refused change leaves the name as it was")
 
 
-func test_the_server_defaults_to_this_computer_and_can_be_changed() -> void:
-	var profile := _profile()
-	assert_eq(profile.server_url, PlayerProfile.DEFAULT_SERVER_URL)
-	assert_eq(profile.set_server_url("  wss://abc.example  "), "")
-	assert_eq(profile.server_url, "wss://abc.example")
-	assert_eq(autofree(PlayerProfile.new(TEST_PATH)).server_url, "wss://abc.example", "kept for next time")
-	assert_eq(profile.set_server_url("   "), "")
-	assert_eq(profile.server_url, PlayerProfile.DEFAULT_SERVER_URL, "empty goes back to the default")
-
-
-func test_the_name_and_the_server_do_not_overwrite_each_other() -> void:
+func test_the_name_survives_other_settings_in_the_file() -> void:
 	var profile := _profile()
 	profile.set_player_name("Aeon")
-	profile.set_server_url("wss://abc.example")
+	profile._file.set_value("online", "server", "wss://old.example")
+	profile._save()
 	profile.set_player_name("Kairos")
-	var again: PlayerProfile = autofree(PlayerProfile.new(TEST_PATH))
-	assert_eq(again.player_name, "Kairos")
-	assert_eq(again.server_url, "wss://abc.example")
+	assert_eq(autofree(PlayerProfile.new(TEST_PATH)).player_name, "Kairos", "a file from an older game still loads")

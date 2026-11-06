@@ -21,7 +21,8 @@ func test_players_register_with_a_name_and_nothing_else() -> void:
 	assert_ne(_state.register(40, "   "), "", "a name is needed")
 	assert_ne(_state.register(40, "x".repeat(PlayerProfile.MAX_NAME_LENGTH + 1)), "")
 	assert_false(_state.is_registered(40), "a refused name is not kept")
-	assert_eq(_state.registered_peers().size(), 3)
+	for peer in [ALICE, BOB, CARA]:
+		assert_true(_state.is_registered(peer))
 
 
 func test_hosting_needs_a_name_a_free_player_and_a_new_room_name() -> void:
@@ -96,11 +97,55 @@ func test_a_disconnected_player_is_forgotten_and_leaves_their_room() -> void:
 	assert_eq(gone["other"], ALICE)
 	assert_false(_state.is_registered(BOB))
 	assert_eq(room.players, 1)
-	assert_eq(_state.registered_peers(), [ALICE] as Array[int])
+	assert_true(_state.is_registered(ALICE), "the host stays")
 
 
 func test_what_is_sent_about_rooms_never_includes_the_password() -> void:
 	_state.host(ALICE, "Secret", false, "pw")
-	for entry in _state.directory.open_snapshot():
+	for room in _state.directory.get_rooms():
+		var entry := room.to_dict()
 		assert_false(entry.has("password_hash"))
 		assert_false(str(entry).contains(RoomInfo.hash_password("pw")), "not even as text")
+
+
+# --- Decks and ready -----------------------------------------------------------------------
+
+
+func test_only_a_player_whose_deck_passed_can_be_ready() -> void:
+	var room: RoomInfo = _state.host(ALICE, "Duel", false, "")["room"]
+	assert_false(_state.set_ready(ALICE, true), "no deck checked yet")
+	_state.set_deck_ok(ALICE, true)
+	assert_true(_state.set_ready(ALICE, true))
+	assert_true(_state.is_ready(ALICE))
+	assert_false(_state.both_ready(room.id), "one player is not a game")
+	_state.set_deck_ok(ALICE, false)
+	assert_false(_state.is_ready(ALICE), "a deck that fails a new check takes back being ready")
+	assert_false(_state.set_ready(CARA, true), "nor can someone in no room")
+
+
+func test_the_game_starts_when_both_players_are_ready() -> void:
+	var room: RoomInfo = _state.host(ALICE, "Duel", false, "")["room"]
+	_state.join(BOB, room.id, "")
+	assert_eq(_state.players_in(room.id), [ALICE, BOB] as Array[int])
+	assert_eq(_state.room_of(BOB), room.id)
+	for peer in [ALICE, BOB]:
+		_state.set_deck_ok(peer, true)
+		_state.set_ready(peer, true)
+	assert_true(_state.both_ready(room.id))
+	_state.set_ready(BOB, false)
+	assert_false(_state.both_ready(room.id), "taking it back stops it")
+
+
+func test_someone_joining_or_leaving_means_saying_ready_again() -> void:
+	var room: RoomInfo = _state.host(ALICE, "Duel", false, "")["room"]
+	_state.set_deck_ok(ALICE, true)
+	_state.set_ready(ALICE, true)
+	_state.join(BOB, room.id, "")
+	assert_false(_state.is_ready(ALICE), "a new player: the host says it again")
+	assert_true(_state.deck_ok(ALICE), "with the same deck")
+	_state.set_ready(ALICE, true)
+	_state.set_deck_ok(BOB, true)
+	_state.set_ready(BOB, true)
+	_state.leave(BOB)
+	assert_false(_state.is_ready(ALICE), "the other player left")
+	assert_false(_state.deck_ok(BOB), "and whoever leaves forgets their deck")

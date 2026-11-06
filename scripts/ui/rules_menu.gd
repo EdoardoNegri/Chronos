@@ -165,7 +165,7 @@ func _matches(entry: Dictionary, terms: PackedStringArray) -> bool:
 
 ## What a search looks for, as every search field reads it (see SearchText).
 static func _words(query: String) -> PackedStringArray:
-	return SearchText.words(_plain(query))
+	return SearchText.needles(_plain(query))
 
 
 ## Lower case on one line, with {notes} as "(notes)" the way the rulebook shows them. Keeps the

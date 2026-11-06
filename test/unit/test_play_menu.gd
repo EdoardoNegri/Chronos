@@ -1,7 +1,14 @@
 extends GutTest
 
+const FakeGitHub := preload("res://test/helpers/fake_github.gd")
 const TEST_PROFILE_PATH := "user://test_play_profile/profile.cfg"
-const SHARED_SERVER := "ws://shared.example:9080"
+
+## The room list the screen reads, as GitHub would keep it.
+var github: FakeGitHub
+
+
+func before_each() -> void:
+	github = FakeGitHub.new()
 
 
 func after_each() -> void:
@@ -9,9 +16,11 @@ func after_each() -> void:
 	DirAccess.remove_absolute(TEST_PROFILE_PATH.get_base_dir())
 
 
-## A lobby for a screen to use. It looks for no public address, so hosting is quick and local.
+## A lobby for a screen to use, with its room list on the fake GitHub. It looks for no public
+## address, so hosting is quick and local.
 func _make_lobby(state := Lobby.State.OFFLINE) -> Lobby:
 	var lobby := Lobby.new()
+	lobby.board = github.make_board()
 	lobby.find_public_address = false
 	add_child_autofree(lobby)
 	lobby.state = state
@@ -19,16 +28,13 @@ func _make_lobby(state := Lobby.State.OFFLINE) -> Lobby:
 
 
 ## The room browser with its own profile (one with this name, or none at all for a first visit) and
-## its own lobby, in the given state. It does not connect anywhere or leave the screen. With
-## `with_server` the profile names a shared server to list rooms from, which is not so by default.
-func _make_scene(player_name := "Tester", state := Lobby.State.CONNECTED, with_server := true, lobby: Lobby = null) -> Control:
+## its own lobby. It does not read the list or connect anywhere by itself, nor leave the screen.
+func _make_scene(player_name := "Tester", lobby: Lobby = null) -> Control:
 	if lobby == null:
-		lobby = _make_lobby(state)
+		lobby = _make_lobby()
 	var profile: PlayerProfile = autofree(PlayerProfile.new(TEST_PROFILE_PATH))
 	if not player_name.is_empty():
 		profile.set_player_name(player_name)
-	if with_server:
-		profile.set_server_url(SHARED_SERVER)
 	var scene: Control = load("res://scenes/play.tscn").instantiate()
 	scene.profile = profile
 	scene.online = lobby
@@ -38,11 +44,13 @@ func _make_scene(player_name := "Tester", state := Lobby.State.CONNECTED, with_s
 	return scene
 
 
-## Gives the screen's lobby the example rooms, as a server would.
-func _show_example_rooms(scene: Control) -> RoomDirectory:
-	var examples := RoomDirectory.with_examples()
-	scene.online.on_rooms(examples.open_snapshot())
-	return examples
+## Puts a few rooms in the list and has the screen read it. The locked ones use the password
+## "time".
+func _show_example_rooms(scene: Control) -> void:
+	github.add_room(RoomInfo.new(&"room_2", "Temporal Rift", "Aeon", 1, 2))
+	github.add_room(RoomInfo.new(&"room_2", "Paradox Lounge", "Lyra", 1, 2, false, true, "time"), "wss://lyra.example")
+	github.add_room(RoomInfo.new(&"room_3", "Home Game", "Nyx", 1, 2), "ws://192.168.1.20:9080", true)
+	await scene.online.board.refresh()
 
 
 func _listed(scene: Control) -> Array[String]:
@@ -53,8 +61,20 @@ func _listed(scene: Control) -> Array[String]:
 	return names
 
 
-func _invite(locked := false, address := "ws://friend.example:9080") -> Dictionary:
-	return InviteLink.parse(InviteLink.make(address, &"room_2", "Friend's room", locked))
+## The id the list gives a room, found by name.
+func _id_of(scene: Control, room_name: String) -> StringName:
+	return scene.online.board.rooms.get_rooms(room_name)[0].id
+
+
+## Pretends the connection to a host went through.
+func _connect_to_host(scene: Control) -> void:
+	scene.online.state = Lobby.State.CONNECTING
+	scene.online.state_changed.emit()
+	scene.online.state = Lobby.State.CONNECTED
+	scene.online.state_changed.emit()
+
+
+# --- Name ----------------------------------------------------------------------------------
 
 
 func test_the_first_visit_asks_for_a_name_and_nothing_else() -> void:
@@ -95,57 +115,60 @@ func test_the_name_is_remembered_for_the_next_visit() -> void:
 	assert_false((later.get_node("%AccountOverlay") as Control).visible)
 
 
-func test_the_list_shows_only_rooms_with_a_free_seat() -> void:
+# --- The room list -------------------------------------------------------------------------
+
+
+func test_the_list_shows_the_rooms_on_github_with_their_padlocks() -> void:
 	var scene := _make_scene()
-	var examples := _show_example_rooms(scene)
-	var listed := _listed(scene)
-	assert_has(listed, "Temporal Rift", "an open room is listed")
-	assert_does_not_have(listed, "Last Second", "a full room is not")
-	assert_does_not_have(listed, "Midnight Duel", "nor one in a game")
-	assert_eq(listed.size(), examples.get_room_count(true))
+	await _show_example_rooms(scene)
+	assert_eq(_listed(scene), ["Home Game", "Paradox Lounge", "Temporal Rift"] as Array[String])
 	assert_eq((scene.get_node("%Status") as Label).text, "", "no count of the rooms under the list")
 
 	var locked: Array[String] = []
 	for row in (scene.get_node("%RoomList") as Control).get_children():
 		if not row.is_queued_for_deletion() and (row.get_node("%LockIcon") as LockIcon).locked:
 			locked.append((row.get_node("%RoomName") as Label).text)
-	assert_has(locked, "Paradox Lounge", "a room with a password has its padlock")
-	assert_does_not_have(locked, "Temporal Rift")
+	assert_eq(locked, ["Paradox Lounge"] as Array[String], "a room with a password has its padlock")
 
 
-func test_the_list_follows_what_a_shared_server_sends() -> void:
+func test_the_list_follows_github_and_can_be_searched() -> void:
 	var scene := _make_scene()
-	assert_true((scene.get_node("%EmptyLabel") as Label).visible, "no rooms yet")
-	assert_string_contains((scene.get_node("%EmptyLabel") as Label).text, "Host one")
-	_show_example_rooms(scene)
-	assert_false((scene.get_node("%EmptyLabel") as Label).visible)
-	scene.online.on_rooms([])
-	assert_true((scene.get_node("%EmptyLabel") as Label).visible, "a room that is taken drops off")
-
-
-func test_with_no_shared_server_the_list_says_how_to_play_with_a_friend() -> void:
-	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false)
 	var empty: Label = scene.get_node("%EmptyLabel")
-	assert_true(empty.visible)
-	assert_string_contains(empty.text, "Host a room")
-	assert_string_contains(empty.text, "link")
-	assert_false((scene.get_node("%HostButton") as Button).disabled, "hosting needs no server")
+	assert_true(empty.visible, "no rooms yet")
+	assert_string_contains(empty.text, "Host one")
+	await _show_example_rooms(scene)
+	assert_false(empty.visible)
+
+	(scene.get_node("%SearchEdit") as LineEdit).text = "lyra"
+	scene._on_search_changed("lyra")
+	assert_eq(_listed(scene), ["Paradox Lounge"] as Array[String], "the host's name is searched too")
+	(scene.get_node("%SearchEdit") as LineEdit).text = "nothing like it"
+	scene._on_search_changed("")
+	assert_string_contains(empty.text, "No open rooms match")
+	(scene.get_node("%SearchEdit") as LineEdit).text = ""
+	scene._on_search_changed("")
+
+	for issue in github.issues:
+		issue["state"] = "closed"
+	await scene.online.board.refresh()
+	assert_true(empty.visible, "rooms that are closed drop off")
 
 
-func test_when_the_shared_server_is_not_there_the_list_says_why() -> void:
-	var scene := _make_scene("Tester", Lobby.State.OFFLINE)
+func test_the_list_says_why_it_is_empty() -> void:
+	var scene := _make_scene()
 	var empty: Label = scene.get_node("%EmptyLabel")
-	assert_string_contains(empty.text, "Not connected")
-	assert_string_contains(empty.text, "Settings", "and where to fix it")
-	assert_false((scene.get_node("%HostButton") as Button).disabled, "but a friend's room can still be hosted")
+	github.down = true
+	await scene.online.board.refresh()
+	assert_string_contains(empty.text, "could not be reached")
+	assert_string_contains(empty.text, "Refresh", "and what to do")
+	assert_false((scene.get_node("%HostButton") as Button).disabled, "a room can still be hosted")
 
-	scene.online.error_text = "Could not reach the server at ws://x."
-	scene.online.state_changed.emit()
-	assert_string_contains(empty.text, "Could not reach the server")
+	scene.online.board.token = ""
+	scene._rebuild_list()
+	assert_string_contains(empty.text, "not set up")
 
-	scene.online.state = Lobby.State.CONNECTING
-	scene.online.state_changed.emit()
-	assert_string_contains(empty.text, "Connecting")
+
+# --- Hosting -------------------------------------------------------------------------------
 
 
 func test_play_menu_hosts_a_room_in_the_chosen_game_mode() -> void:
@@ -167,8 +190,8 @@ func test_the_host_dialog_has_a_password_and_no_player_count() -> void:
 	assert_eq(password.text, "", "no password unless one is typed")
 
 
-func test_creating_a_room_starts_it_on_this_computer_with_an_invite_link() -> void:
-	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false)
+func test_creating_a_room_starts_it_on_this_computer_and_puts_it_in_the_list() -> void:
+	var scene := _make_scene()
 	var overlay: Control = scene.get_node("%HostOverlay")
 	var create: Button = scene.get_node("%CreateButton")
 	var error: Label = scene.get_node("%FormError")
@@ -178,7 +201,8 @@ func test_creating_a_room_starts_it_on_this_computer_with_an_invite_link() -> vo
 	scene._create_room()
 	assert_ne(error.text, "", "an empty name is refused")
 	assert_false(create.disabled)
-	assert_false(scene.online.is_server, "and no server was started for it")
+	assert_false(scene.online.is_player, "and no server was started for it")
+	assert_eq(github.open_count(), 0, "nor anything put in the list")
 
 	scene.online.host_failed.emit("Could not start a server on this computer.")
 	assert_eq(error.text, "Could not start a server on this computer.", "a reason from the lobby is shown")
@@ -191,35 +215,45 @@ func test_creating_a_room_starts_it_on_this_computer_with_an_invite_link() -> vo
 	assert_true(scene.online.is_player, "the room runs on this computer")
 	assert_eq(scene.online.room.room_name, "My room")
 	assert_true(scene.online.room.has_password())
-	var link := InviteLink.parse(scene.online.invite_link)
-	assert_eq(link["room_id"], str(scene.online.room.id), "the link is for this room")
-	assert_true(link["locked"], "and says it has a password")
-	assert_false(scene.online.invite_link.contains("pw"), "without giving the password away")
+	assert_eq(github.open_count(), 1, "the room is in the list")
+	var entry := RoomBoard.read_issue(github.issues[0])
+	assert_eq(entry["room_id"], str(scene.online.room.id), "with the id to join it by")
+	assert_true(entry["locked"], "it says it has a password")
+	assert_false(str(github.issues[0]["body"]).contains("pw"), "without giving the password away")
+
+	scene.online.stop_hosting()
+	assert_eq(github.open_count(), 0, "closing the room takes it off the list")
 
 
 func test_creating_a_room_does_not_rebuild_the_list_once_the_screen_has_left() -> void:
-	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false)
-	# Going to the room screen takes this screen out of the tree at once, and only then does the
-	# lobby send the rooms that are open now.
+	var scene := _make_scene()
+	# Going to the room screen takes this screen out of the tree at once, and the list can still
+	# change after that.
 	var parent := scene.get_parent()
 	scene.online.hosted.connect(func(_room: RoomInfo) -> void: parent.remove_child(scene))
 	scene._open_host_dialog()
 	(scene.get_node("%RoomNameEdit") as LineEdit).text = "My room"
 	scene._create_room()
 	assert_eq(scene.online.room.room_name, "My room", "the room is open")
+	scene.online.board.rooms_changed.emit()
 	assert_eq((scene.get_node("%RoomList") as Node).get_child_count(), 0, "and no rows were made off screen")
 
 
-func test_joining_a_room_with_a_password_asks_for_it() -> void:
+# --- Joining -------------------------------------------------------------------------------
+
+
+func test_joining_a_room_with_a_password_asks_for_it_once_the_host_is_reached() -> void:
 	var scene := _make_scene()
-	_show_example_rooms(scene)
-	var locked: RoomInfo = scene.online.rooms.get_rooms("lounge")[0]
+	await _show_example_rooms(scene)
 	var overlay: Control = scene.get_node("%JoinOverlay")
 	var password: LineEdit = scene.get_node("%JoinPasswordEdit")
 	var error: Label = scene.get_node("%JoinError")
 
-	scene._join_room(locked.id)
-	assert_true(overlay.visible, "a locked room asks for its password first")
+	scene._join_room(_id_of(scene, "lounge"))
+	assert_string_contains((scene.get_node("%Status") as Label).text, "Joining “Paradox Lounge”")
+	assert_false(overlay.visible, "not before the host has been reached")
+	_connect_to_host(scene)
+	assert_true(overlay.visible, "then the password is asked for")
 	assert_string_contains((scene.get_node("%JoinRoomLabel") as Label).text, "Paradox Lounge")
 	assert_true(password.secret)
 
@@ -227,7 +261,8 @@ func test_joining_a_room_with_a_password_asks_for_it() -> void:
 	assert_ne(error.text, "", "a wrong password is said so")
 	assert_true(overlay.visible, "and the dialog stays to try again")
 
-	scene.online.on_join_result(OK, locked.to_dict(), locked.host_name)
+	var room := RoomInfo.new(&"room_2", "Paradox Lounge", "Lyra", 2, 2, false, true, "time")
+	scene.online.on_join_result(OK, room.to_dict(), "Lyra")
 	assert_false(overlay.visible, "the right password gets in")
 	assert_eq(scene.online.room.room_name, "Paradox Lounge")
 	assert_eq(scene.online.opponent_name, "Lyra")
@@ -235,184 +270,88 @@ func test_joining_a_room_with_a_password_asks_for_it() -> void:
 
 func test_joining_a_room_without_a_password_does_not_ask() -> void:
 	var scene := _make_scene()
-	_show_example_rooms(scene)
-	var open: RoomInfo = scene.online.rooms.get_rooms("temporal")[0]
-	scene._join_room(open.id)
+	await _show_example_rooms(scene)
+	scene._join_room(_id_of(scene, "temporal"))
+	_connect_to_host(scene)
 	assert_false((scene.get_node("%JoinOverlay") as Control).visible)
+	assert_eq(scene._joining_id, &"room_2", "it asks the host for the room by the host's own id")
+
+
+func test_cancelling_the_password_question_leaves_the_host() -> void:
+	var scene := _make_scene()
+	await _show_example_rooms(scene)
+	scene._join_room(_id_of(scene, "lounge"))
+	_connect_to_host(scene)
+	(scene.get_node("%CancelJoinButton") as Button).pressed.emit()
+	assert_false((scene.get_node("%JoinOverlay") as Control).visible)
+	assert_eq(scene._target, {}, "nothing is being joined any more")
+	assert_eq(scene.online.state, Lobby.State.OFFLINE)
+
+
+func test_a_host_that_cannot_be_reached_is_taken_off_the_list() -> void:
+	var scene := _make_scene()
+	await _show_example_rooms(scene)
+	var id := _id_of(scene, "temporal")
+	scene._join_room(id)
+	scene.online.state = Lobby.State.CONNECTING
+	scene.online.state_changed.emit()
+	scene.online.state = Lobby.State.OFFLINE
+	scene.online.state_changed.emit()
+	await get_tree().process_frame
+	var status := (scene.get_node("%Status") as Label).text
+	assert_string_contains(status, "Could not reach “Temporal Rift”")
+	assert_string_contains(status, "taken off the list")
+	assert_false(github.is_open(int(str(id))), "its issue is closed for everyone")
+	assert_does_not_have(_listed(scene), "Temporal Rift")
+
+
+func test_a_room_only_reachable_on_its_hosts_network_is_left_in_the_list() -> void:
+	var scene := _make_scene()
+	await _show_example_rooms(scene)
+	var id := _id_of(scene, "home game")
+	scene._join_room(id)
+	scene.online.state = Lobby.State.CONNECTING
+	scene.online.state_changed.emit()
+	scene.online.state = Lobby.State.OFFLINE
+	scene.online.state_changed.emit()
+	assert_string_contains((scene.get_node("%Status") as Label).text, "host's network")
+	assert_true(github.is_open(int(str(id))), "this computer may just not be on that network")
+
+
+func test_a_room_that_is_gone_from_its_hosts_game_is_taken_off_the_list() -> void:
+	var scene := _make_scene()
+	await _show_example_rooms(scene)
+	var id := _id_of(scene, "temporal")
+	scene._join_room(id)
+	_connect_to_host(scene)
+	scene.online.on_join_result(ERR_DOES_NOT_EXIST, {}, "")
+	await get_tree().process_frame
+	assert_string_contains((scene.get_node("%Status") as Label).text, "closed")
+	assert_false(github.is_open(int(str(id))))
+	assert_eq(scene.online.state, Lobby.State.OFFLINE, "and the host's game is left")
 
 
 func test_a_room_that_was_just_taken_is_explained() -> void:
 	var scene := _make_scene()
-	_show_example_rooms(scene)
-	var open: RoomInfo = scene.online.rooms.get_rooms("temporal")[0]
-	scene._join_room(open.id)
+	await _show_example_rooms(scene)
+	var id := _id_of(scene, "temporal")
+	scene._join_room(id)
+	_connect_to_host(scene)
 	scene.online.on_join_result(ERR_BUSY, {}, "")
 	assert_string_contains((scene.get_node("%Status") as Label).text, "Temporal Rift")
 	assert_string_contains((scene.get_node("%Status") as Label).text, "full")
-	scene.online.on_join_result(ERR_ALREADY_IN_USE, {}, "")
-	assert_string_contains((scene.get_node("%Status") as Label).text, "already in a room")
+	assert_true(github.is_open(int(str(id))), "a full room stays in the list")
+
+
+func test_a_room_no_longer_in_the_list_is_said_to_be_closed() -> void:
+	var scene := _make_scene()
+	scene._join_room(&"12345")
+	assert_string_contains((scene.get_node("%Status") as Label).text, "closed")
 
 
 func test_a_notice_waiting_for_the_player_is_shown_once() -> void:
 	var lobby := _make_lobby()
 	lobby.notice = "The host closed the room."
-	var scene := _make_scene("Tester", Lobby.State.OFFLINE, true, lobby)
+	var scene := _make_scene("Tester", lobby)
 	assert_eq((scene.get_node("%Status") as Label).text, "The host closed the room.")
 	assert_eq(lobby.notice, "", "it is not shown again")
-
-
-# --- Invite links --------------------------------------------------------------------------
-
-
-func test_a_link_opened_while_on_this_screen_joins_the_room_in_it() -> void:
-	var lobby := _make_lobby(Lobby.State.CONNECTED)
-	lobby.server_url = "ws://friend.example:9080"
-	lobby.player_name = "Tester"
-	var scene := _make_scene("Tester", Lobby.State.CONNECTED, false, lobby)
-	lobby.open_invite(_invite())
-	assert_eq(lobby.pending_invite, {}, "it is used once")
-	assert_string_contains((scene.get_node("%Status") as Label).text, "Friend's room", "it says which room it is joining")
-	lobby.on_join_result(OK, RoomInfo.new(&"room_2", "Friend's room", "Kairos", 2, 2).to_dict(), "Kairos")
-	assert_eq(lobby.room.room_name, "Friend's room", "and joins it")
-	assert_eq(lobby.opponent_name, "Kairos")
-
-
-func test_a_link_to_a_room_with_a_password_asks_for_it_once_connected() -> void:
-	var lobby := _make_lobby(Lobby.State.OFFLINE)
-	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false, lobby)
-	var overlay: Control = scene.get_node("%JoinOverlay")
-	scene._start_invite(_invite(true))
-	assert_false(overlay.visible, "not before the host has been reached")
-	lobby.state = Lobby.State.CONNECTED
-	lobby.state_changed.emit()
-	assert_true(overlay.visible, "then the password is asked for")
-	assert_string_contains((scene.get_node("%JoinRoomLabel") as Label).text, "Friend's room")
-
-	lobby.on_join_result(ERR_UNAUTHORIZED, {}, "")
-	assert_ne((scene.get_node("%JoinError") as Label).text, "")
-	assert_true(overlay.visible, "a wrong password can be tried again")
-	lobby.on_join_result(OK, RoomInfo.new(&"room_2", "Friend's room", "Kairos", 2, 2, false, false, "pw").to_dict(), "Kairos")
-	assert_false(overlay.visible)
-	assert_eq(lobby.room.room_name, "Friend's room")
-
-
-func test_cancelling_the_password_question_gives_up_on_the_link() -> void:
-	var lobby := _make_lobby(Lobby.State.OFFLINE)
-	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false, lobby)
-	scene._start_invite(_invite(true))
-	lobby.state = Lobby.State.CONNECTED
-	lobby.state_changed.emit()
-	(scene.get_node("%CancelJoinButton") as Button).pressed.emit()
-	assert_false((scene.get_node("%JoinOverlay") as Control).visible)
-	assert_eq(scene._invite, {}, "nothing is followed any more")
-
-
-func test_a_host_that_cannot_be_reached_is_said_so() -> void:
-	var lobby := _make_lobby(Lobby.State.OFFLINE)
-	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false, lobby)
-	scene._start_invite(_invite())
-	lobby.state = Lobby.State.CONNECTING
-	lobby.state_changed.emit()
-	lobby.state = Lobby.State.OFFLINE
-	lobby.state_changed.emit()
-	var status := (scene.get_node("%Status") as Label).text
-	assert_string_contains(status, "Could not reach")
-	assert_string_contains(status, "Friend's room")
-
-
-func test_a_room_that_is_gone_is_said_so_when_following_a_link() -> void:
-	var lobby := _make_lobby(Lobby.State.CONNECTED)
-	lobby.server_url = "ws://friend.example:9080"
-	lobby.player_name = "Tester"
-	var scene := _make_scene("Tester", Lobby.State.CONNECTED, false, lobby)
-	scene._start_invite(_invite())
-	lobby.on_join_result(ERR_DOES_NOT_EXIST, {}, "")
-	assert_string_contains((scene.get_node("%Status") as Label).text, "closed")
-	assert_eq(scene._invite, {})
-
-
-func test_a_link_the_game_was_started_with_is_followed() -> void:
-	var lobby := _make_lobby(Lobby.State.CONNECTED)
-	lobby.server_url = "ws://friend.example:9080"
-	lobby.player_name = "Tester"
-	lobby.pending_invite = _invite()
-	var scene := _make_scene("Tester", Lobby.State.CONNECTED, false, lobby)
-	assert_eq(lobby.pending_invite, {}, "it is used once")
-	assert_string_contains((scene.get_node("%Status") as Label).text, "Joining")
-	lobby.on_join_result(OK, RoomInfo.new(&"room_2", "Friend's room", "Kairos", 2, 2).to_dict(), "Kairos")
-	assert_eq(lobby.room.room_name, "Friend's room")
-
-
-func test_a_link_opened_before_there_is_a_name_waits_for_one() -> void:
-	var lobby := _make_lobby(Lobby.State.CONNECTED)
-	lobby.server_url = "ws://friend.example:9080"
-	lobby.pending_invite = _invite()
-	var scene := _make_scene("", Lobby.State.CONNECTED, false, lobby)
-	assert_true((scene.get_node("%AccountOverlay") as Control).visible, "the name comes first")
-	assert_eq(scene._invite, {}, "the link has not been followed yet")
-	var edit: LineEdit = scene.get_node("%AccountNameEdit")
-	edit.text = "Kairos"
-	edit.text_submitted.emit("Kairos")
-	assert_eq(scene._invite["room_id"], "room_2", "and then the link is followed")
-
-
-# --- The question about opening invite links -----------------------------------------------
-
-
-## Stands in for the real link setup, which would change the registry.
-class FakeLinks:
-	extends LinkHandler
-	var registered := false
-
-	func is_supported() -> bool:
-		return true
-
-	func register() -> Error:
-		registered = true
-		return OK
-
-
-func _links_dialog(scene: Control) -> ConfirmationDialog:
-	for child in scene.get_children():
-		if child is ConfirmationDialog:
-			return child
-	return null
-
-
-func test_the_game_asks_before_it_lets_links_open_it() -> void:
-	var scene := _make_scene()
-	var fake := FakeLinks.new()
-	scene.links = fake
-	scene._offer_links_once(true)
-	var dialog := _links_dialog(scene)
-	assert_not_null(dialog, "the question is shown")
-	assert_true(dialog.visible)
-	assert_false(fake.registered, "nothing is changed until the player says yes")
-	assert_eq(dialog.ok_button_text, "Yes, allow")
-	assert_eq(dialog.cancel_button_text, "Not now")
-	assert_string_contains(dialog.dialog_text, "Settings", "it says it can be turned off again")
-
-	dialog.confirmed.emit()
-	assert_true(fake.registered, "yes sets links up")
-	assert_true(scene.profile.links_setup_done, "and it is not asked again")
-	assert_string_contains((scene.get_node("%Status") as Label).text, "now open Chronos")
-
-
-func test_saying_not_now_changes_nothing_and_is_not_asked_again() -> void:
-	var scene := _make_scene()
-	var fake := FakeLinks.new()
-	scene.links = fake
-	scene._offer_links_once(true)
-	_links_dialog(scene).canceled.emit()
-	assert_false(fake.registered)
-	assert_true(scene.profile.links_setup_done)
-	var before := scene.get_child_count()
-	scene._offer_links_once()
-	assert_eq(scene.get_child_count(), before, "the question is not asked again")
-
-
-func test_the_question_is_not_asked_when_running_from_the_editor() -> void:
-	var scene := _make_scene()
-	scene.links = FakeLinks.new()
-	scene._offer_links_once()
-	assert_null(_links_dialog(scene), "only the real game asks")

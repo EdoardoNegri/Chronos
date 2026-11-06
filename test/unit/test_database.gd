@@ -534,3 +534,15 @@ func test_database_opens_a_card_as_a_table_and_goes_back() -> void:
 
 	(scene.get_node("%BackButton") as Button).pressed.emit()
 	assert_true((scene.get_node("%ResultsPanel") as Control).visible, "back goes from a card to the results")
+
+
+func test_a_search_describes_itself_as_typed_and_filters_the_same_whatever_the_order() -> void:
+	var cards := CardLibrary.new(CardLibrary.OFFICIAL_DIRECTORY).load_cards(false)
+	var query := CardQuery.parse("o:a time>=2 -t:spell")
+	assert_eq(query.describe(), "the text includes “a” and time cost ≥ 2 and the type doesn't include “spell”", "the description keeps the order typed")
+	var by_hand: Array[CardData] = []
+	for card in cards:
+		if card.rules_text.to_lower().contains("a") and card.time_cost >= 2 and not card.type_line().to_lower().contains("spell"):
+			by_hand.append(card)
+	assert_eq(query.filter(cards), by_hand, "and finds what checking each card by hand finds")
+	assert_eq(CardQuery.parse("").filter(cards), cards, "an empty search keeps every card")

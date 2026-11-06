@@ -67,6 +67,11 @@ func load_cards(with_art := true) -> Array[CardData]:
 	return cards
 
 
+## Every saved card by id (id -> CardData).
+func load_by_id(with_art := true) -> Dictionary:
+	return CardCatalog.by_id(load_cards(with_art))
+
+
 ## A fresh card id.
 static func new_id() -> String:
 	return Crypto.new().generate_random_bytes(6).hex_encode()

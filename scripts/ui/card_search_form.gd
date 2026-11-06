@@ -54,8 +54,8 @@ var _number_fields: Array[BoxContainer] = []
 
 
 func _ready() -> void:
-	for source in SOURCES:
-		_source_option.add_item(source)
+	for source_name in SOURCES:
+		_source_option.add_item(source_name)
 	_source_option.item_selected.connect(func(_index: int) -> void: changed.emit())
 	_build_number_filters()
 	_apply_layout()
@@ -78,12 +78,7 @@ func setup(cards: Array[CardData], catalog: CardCatalog) -> void:
 
 ## The cards that match the form, in the order given to setup().
 func search(cards: Array[CardData], points_list: PointsList = null) -> Array[CardData]:
-	var query := CardQuery.parse(form_query(), points_list)
-	var found: Array[CardData] = []
-	for card in cards:
-		if is_searched(card) and query.matches(card):
-			found.append(card)
-	return found
+	return CardQuery.parse(form_query(), points_list).filter(cards.filter(is_searched))
 
 
 ## Whether the "Cards" choice covers this card.

@@ -2,8 +2,8 @@ class_name RoomDirectory
 extends RefCounted
 ## A list of rooms and the rules for them: names, two players to a game, passwords, who can join.
 ##
-## The lobby server keeps the real list in one of these (see LobbyState), and each player's game
-## keeps the last list the server sent in another, to show in the room browser.
+## The host's game keeps its room in one of these (see LobbyState), and the room list keeps the
+## open rooms it last read in another, to show in the room browser (see RoomBoard).
 
 signal rooms_changed
 
@@ -19,18 +19,11 @@ var _rooms: Array[RoomInfo] = []
 var _next_id := 1
 
 
-## A directory with a few example rooms in it, for trying things out and for tests.
-static func with_examples() -> RoomDirectory:
-	var directory := RoomDirectory.new()
-	directory._seed_example_rooms()
-	return directory
-
-
 ## Rooms whose name and host together hold every word of `query`, read like every search field
 ## reads it (see SearchText), sorted by name. With `only_open`, rooms that cannot be joined (full,
 ## or already in a game) are left out.
 func get_rooms(query := "", only_open := false) -> Array[RoomInfo]:
-	var wanted := SearchText.words(query)
+	var wanted := SearchText.needles(query)
 	var result: Array[RoomInfo] = []
 	for room in _rooms:
 		if only_open and not room.is_joinable():
@@ -57,15 +50,7 @@ func get_room(room_id: StringName) -> RoomInfo:
 	return null
 
 
-## The rooms that can be joined, as they are sent to players (see RoomInfo.to_dict).
-func open_snapshot() -> Array[Dictionary]:
-	var snapshot: Array[Dictionary] = []
-	for room in get_rooms("", true):
-		snapshot.append(room.to_dict())
-	return snapshot
-
-
-## Replaces every room with the ones in a snapshot the server sent.
+## Replaces every room with the ones in a snapshot (rooms as RoomInfo.to_dict gives them).
 func replace_from_snapshot(snapshot: Array) -> void:
 	_rooms.clear()
 	for entry: Variant in snapshot:
@@ -159,24 +144,3 @@ func _by_name(a: RoomInfo, b: RoomInfo) -> bool:
 func _make_id() -> StringName:
 	_next_id += 1
 	return StringName("room_%d" % _next_id)
-
-
-func _seed_example_rooms() -> void:
-	# Name, host, players in it, in a game, custom cards, password. The rooms with a password in
-	# this list all use "time".
-	var seeds := [
-		["Temporal Rift", "Aeon", 1, false, false, ""],
-		["Midnight Duel", "Kairos", 2, true, false, ""],
-		["Casual Hourglass", "Sandy", 1, false, true, ""],
-		["Beginners Welcome", "Tempus", 1, false, false, ""],
-		["Ranked Clash", "Vesper", 2, false, false, ""],
-		["Paradox Lounge", "Lyra", 1, false, true, "time"],
-		["Last Second", "Orion", 2, false, false, ""],
-		["Deck Testing", "Nyx", 1, false, true, "time"],
-	]
-	for entry: Array in seeds:
-		_rooms.append(
-			RoomInfo.new(
-				_make_id(), entry[0], entry[1], entry[2], PLAYERS, entry[3], entry[4], entry[5]
-			)
-		)

@@ -77,6 +77,7 @@ layout_mode = 2
 theme_override_constants/separation = 14
 
 [node name="YouPanel" type="PanelContainer" parent="Content/Layout/PlayersRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"Card"
@@ -96,6 +97,7 @@ text = "You"
 text_overrun_behavior = 3
 
 [node name="OpponentPanel" type="PanelContainer" parent="Content/Layout/PlayersRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"Card"
@@ -114,52 +116,25 @@ theme_override_font_sizes/font_size = 22
 text = "Waiting for another player…"
 text_overrun_behavior = 3
 
-[node name="InvitePanel" type="PanelContainer" parent="Content/Layout"]
-unique_name_in_owner = true
-visible = false
+[node name="DeckRow" type="HBoxContainer" parent="Content/Layout"]
 layout_mode = 2
-theme_type_variation = &"Card"
+theme_override_constants/separation = 12
 
-[node name="InviteMargin" type="MarginContainer" parent="Content/Layout/InvitePanel"]
-layout_mode = 2
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 12
-
-[node name="InviteColumn" type="VBoxContainer" parent="Content/Layout/InvitePanel/InviteMargin"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="InviteLabel" type="Label" parent="Content/Layout/InvitePanel/InviteMargin/InviteColumn"]
-layout_mode = 2
-theme_type_variation = &"FieldLabel"
-text = "Invite link: send it to your friend, who opens it to join this room"
-
-[node name="InviteRow" type="HBoxContainer" parent="Content/Layout/InvitePanel/InviteMargin/InviteColumn"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="LinkEdit" type="LineEdit" parent="Content/Layout/InvitePanel/InviteMargin/InviteColumn/InviteRow"]
+[node name="DeckEdit" type="LineEdit" parent="Content/Layout/DeckRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-editable = false
+tooltip_text = "Your decks that can be played in this room. Type to search them."
+placeholder_text = "Choose your deck: type to search"
+clear_button_enabled = true
 
-[node name="CopyLinkButton" type="Button" parent="Content/Layout/InvitePanel/InviteMargin/InviteColumn/InviteRow"]
+[node name="ReadyButton" type="Button" parent="Content/Layout/DeckRow"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
 theme_type_variation = &"PrimaryButton"
 disabled = true
-text = "Copy link"
-
-[node name="LinkNote" type="Label" parent="Content/Layout/InvitePanel/InviteMargin/InviteColumn"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
-theme_override_font_sizes/font_size = 16
-autowrap_mode = 3
+text = "Ready"
 
 [node name="ChatPanel" type="PanelContainer" parent="Content/Layout"]
 layout_mode = 2
@@ -201,19 +176,6 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"PrimaryButton"
 text = "Send"
-
-[node name="Footer" type="HBoxContainer" parent="Content/Layout"]
-layout_mode = 2
-
-[node name="FooterSpacer" type="Control" parent="Content/Layout/Footer"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-
-[node name="LeaveButton" type="Button" parent="Content/Layout/Footer"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Leave room"
 
 [node name="BackButton" type="Button" parent="."]
 unique_name_in_owner = true

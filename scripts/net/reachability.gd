@@ -16,6 +16,19 @@ signal address_found(address: String, how: String)
 signal failed(reason: String)
 
 const TUNNEL_SECONDS := 25.0
+## A new tunnel address can take a few seconds to work. It is tried (see verify) for at most this
+## long, once every VERIFY_RETRY_SECONDS, before it is given anyway.
+const VERIFY_SECONDS := 30.0
+const VERIFY_RETRY_SECONDS := 1.0
+## The tunnel's address is only tried this long after the tunnel program says it is connected to
+## Cloudflare (or after it gave the address, if it never says so). Asking for a name before it
+## exists makes the computer remember, for minutes, that there is no such name.
+const SETTLE_SECONDS := 3.0
+## What the tunnel program prints once its tunnel works.
+const REGISTERED_TEXT := "Registered tunnel connection"
+## Where the tunnel program that is running is written down, so one left running by a game that
+## did not close properly (it crashed, or was stopped from the editor) is stopped next time.
+const PID_FILE := "user://tunnel_pid.txt"
 const TUNNEL_PROGRAM := "cloudflared"
 ## The tunnel program that comes with the game (Windows only), and where an exported game unpacks
 ## it: a program cannot be run from inside the game's packed files.
@@ -28,12 +41,18 @@ var arguments := PackedStringArray()
 ## Whether to ask the router to open the port when there is no tunnel. (A test turns it off, so it
 ## never changes anyone's router.)
 var try_router := true
+## Whether a tunnel's address is tried before it is given, so it is only listed once it works.
+## (Tests turn it off.)
+var verify := true
 
 var _port := 0
 var _pid := -1
 var _tunnel_thread: Thread
 var _tunnel_mutex := Mutex.new()
 var _tunnel_address := ""
+var _tunnel_registered := false
+## How long since the tunnel's address was given.
+var _address_waited := 0.0
 var _stop_reading := false
 var _waited := 0.0
 var _trying_tunnel := false
@@ -41,6 +60,11 @@ var _upnp_thread: Thread
 var _upnp_result: Dictionary = {}
 var _upnp: UPNP
 var _done := false
+## The connection that tries the tunnel's address, and how long it has been tried.
+var _probe: WebSocketPeer
+var _probe_address := ""
+var _probe_waited := 0.0
+var _probe_retry_in := 0.0
 
 
 ## Starts looking for an address for the server listening on `port`.
@@ -51,6 +75,7 @@ func start(port: int) -> void:
 		program = find_tunnel_program()
 		arguments = PackedStringArray(["tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:%d" % port])
 	if not program.is_empty():
+		stop_leftover_tunnel()
 		_start_tunnel()
 	else:
 		_start_upnp("There is no tunnel program next to the game, and ")
@@ -60,10 +85,12 @@ func start(port: int) -> void:
 func stop() -> void:
 	_done = true
 	_trying_tunnel = false
+	_stop_probe()
 	_stop_reading = true
 	if _pid > 0:
 		_kill_process_tree(_pid)
 		_pid = -1
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(PID_FILE))
 	if _tunnel_thread != null and _tunnel_thread.is_started():
 		_tunnel_thread.wait_to_finish()
 		_tunnel_thread = null
@@ -139,6 +166,35 @@ static func unpack(source: String, destination: String) -> String:
 	return target
 
 
+## Stops a tunnel program that a game before this one left running, if there is one.
+static func stop_leftover_tunnel() -> void:
+	if not FileAccess.file_exists(PID_FILE):
+		return
+	var pid := FileAccess.get_file_as_string(PID_FILE).strip_edges().to_int()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(PID_FILE))
+	if pid > 0 and OS.is_process_running(pid) and _is_tunnel_process(pid):
+		_kill_process_tree(pid)
+
+
+## Whether the program running as `pid` is the tunnel program (the number may have been given to
+## another program since).
+static func _is_tunnel_process(pid: int) -> bool:
+	if OS.get_name() != "Windows":
+		return false
+	var output: Array = []
+	OS.execute("tasklist", ["/FI", "PID eq %d" % pid, "/FO", "CSV", "/NH"], output)
+	return not output.is_empty() and str(output[0]).to_lower().contains(TUNNEL_PROGRAM)
+
+
+## This computer's address on its own network, for the server listening on `port` (as a ws://
+## address; on 127.0.0.1 if the computer has no network).
+static func local_address(port: int) -> String:
+	for address in IP.get_local_addresses():
+		if address.count(".") == 3 and is_private_address(address) and not address.begins_with("127.") and not address.begins_with("169.254."):
+			return "ws://%s:%d" % [address, port]
+	return "ws://127.0.0.1:%d" % port
+
+
 ## The public address in what a tunnel program printed ("wss://...") or "" if there is none yet.
 static func parse_tunnel_address(text: String) -> String:
 	var pattern := RegEx.create_from_string("https://[A-Za-z0-9-]+\\.trycloudflare\\.com")
@@ -166,15 +222,22 @@ static func is_private_address(ip: String) -> bool:
 func _process(delta: float) -> void:
 	if _done:
 		return
-	if _trying_tunnel:
+	if _probe != null:
+		_check_probe(delta)
+	elif _trying_tunnel:
 		_tunnel_mutex.lock()
 		var address := _tunnel_address
+		var registered := _tunnel_registered
 		_tunnel_mutex.unlock()
 		_waited += delta
 		if not address.is_empty():
-			_trying_tunnel = false
-			_done = true
-			address_found.emit(address, "a tunnel")
+			_address_waited += delta
+			if not verify:
+				_trying_tunnel = false
+				_found(address, "a tunnel")
+			elif _address_waited >= SETTLE_SECONDS * (1.0 if registered else 3.0):
+				_trying_tunnel = false
+				_start_probe(address)
 		elif _waited > TUNNEL_SECONDS or (_pid > 0 and not OS.is_process_running(_pid)):
 			_trying_tunnel = false
 			_stop_tunnel()
@@ -182,12 +245,59 @@ func _process(delta: float) -> void:
 	elif _upnp_thread != null and _upnp_thread.is_started() and not _upnp_thread.is_alive():
 		_upnp_thread.wait_to_finish()
 		_upnp_thread = null
-		_done = true
 		if _upnp_result.has("address"):
 			_upnp = _upnp_result["upnp"]
-			address_found.emit(_upnp_result["address"], "the router")
+			_found(_upnp_result["address"], "the router")
 		else:
+			_done = true
 			failed.emit(str(_upnp_result.get("error", "No address could be made.")))
+
+
+func _found(address: String, how: String) -> void:
+	_done = true
+	address_found.emit(address, how)
+
+
+## Tries to open a connection to the tunnel's address, to know it leads here.
+func _start_probe(address: String) -> void:
+	_probe_address = address
+	_probe_waited = 0.0
+	_open_probe()
+
+
+func _open_probe() -> void:
+	_probe = WebSocketPeer.new()
+	_probe_retry_in = 0.0
+	if _probe.connect_to_url(_probe_address) != OK:
+		_probe_retry_in = VERIFY_RETRY_SECONDS
+
+
+## Gives the address once a connection to it opens; tries again while it does not, and gives it
+## anyway once VERIFY_SECONDS have gone by (it may still work for others).
+func _check_probe(delta: float) -> void:
+	_probe_waited += delta
+	if _probe_retry_in > 0.0:
+		_probe_retry_in -= delta
+		if _probe_retry_in <= 0.0:
+			_open_probe()
+		return
+	_probe.poll()
+	match _probe.get_ready_state():
+		WebSocketPeer.STATE_OPEN:
+			_stop_probe()
+			_found(_probe_address, "a tunnel")
+			return
+		WebSocketPeer.STATE_CLOSED:
+			_probe_retry_in = VERIFY_RETRY_SECONDS
+	if _probe_waited > VERIFY_SECONDS:
+		_stop_probe()
+		_found(_probe_address, "a tunnel")
+
+
+func _stop_probe() -> void:
+	if _probe != null:
+		_probe.close()
+		_probe = null
 
 
 func _stop_tunnel() -> void:
@@ -206,9 +316,15 @@ func _start_tunnel() -> void:
 		_start_upnp("The tunnel program could not be started, and ")
 		return
 	_pid = int(started["pid"])
+	var pid_file := FileAccess.open(PID_FILE, FileAccess.WRITE)
+	if pid_file != null:
+		pid_file.store_string(str(_pid))
+		pid_file.close()
 	_trying_tunnel = true
 	_waited = 0.0
+	_address_waited = 0.0
 	_tunnel_address = ""
+	_tunnel_registered = false
 	_stop_reading = false
 	_tunnel_thread = Thread.new()
 	_tunnel_thread.start(_read_tunnel_output.bind(started["stderr"], started["stdio"], _pid))
@@ -226,9 +342,12 @@ func _read_tunnel_output(error_pipe: FileAccess, output_pipe: FileAccess, pid: i
 			OS.delay_msec(50)
 			continue
 		var address := parse_tunnel_address(line)
-		if not address.is_empty():
+		if not address.is_empty() or line.contains(REGISTERED_TEXT):
 			_tunnel_mutex.lock()
-			_tunnel_address = address
+			if not address.is_empty():
+				_tunnel_address = address
+			else:
+				_tunnel_registered = true
 			_tunnel_mutex.unlock()
 	if output_pipe != null:
 		output_pipe.close()

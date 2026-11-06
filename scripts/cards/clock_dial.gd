@@ -64,6 +64,7 @@ func _draw() -> void:
 	var center := size * 0.5
 	var radius := minf(size.x, size.y) * 0.5
 	var cost := maxi(value, 0)
+	@warning_ignore("integer_division")
 	var full_turns := cost / FULL_TURN
 	var fraction := float(cost % FULL_TURN) / FULL_TURN
 	var start := -PI * 0.5

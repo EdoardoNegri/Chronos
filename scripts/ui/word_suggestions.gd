@@ -7,11 +7,19 @@ extends PanelContainer
 ##
 ## Up and Down move through the list, Enter or Tab take the highlighted one and Escape closes it.
 ## With nothing highlighted, Enter and Tab work as they do without the list.
+##
+## With `whole_text`, the field holds one name (which may have spaces), and the list offers every
+## name that contains what is typed, anywhere in it.
+
+## A suggestion was taken: the field now holds `text`.
+signal accepted(text: String)
 
 ## How many suggestions show before the list scrolls.
 const ROWS := 5
 const SEPARATORS := [" ", ",", "\"", "“", "”"]
 
+## Whether the whole field is one name to search for, instead of words to complete.
+var whole_text := false
 ## The suggestions listed now, and which one is highlighted (-1 for none).
 var suggested: Array[String] = []
 var highlighted := -1
@@ -56,6 +64,9 @@ func attach(edit: LineEdit, host: Node, candidates: Callable) -> void:
 ## Lists the known words that start with the word at the caret (all of them when there is none),
 ## leaving out words already in the field.
 func refresh() -> void:
+	if whole_text:
+		_suggest_names()
+		return
 	var start := _word_start()
 	var caret := _edit.caret_column
 	var typed := _edit.text.substr(start, caret - start).to_lower()
@@ -67,6 +78,21 @@ func refresh() -> void:
 		var lower := word.to_lower()
 		if lower.begins_with(typed) and lower != typed and not used.has(lower):
 			suggested.append(word)
+	_show_suggested()
+
+
+## The names that contain what is typed (all of them when nothing is), except the one typed.
+func _suggest_names() -> void:
+	var typed := _edit.text.strip_edges().to_lower()
+	suggested.clear()
+	for candidate: String in _candidates.call():
+		var lower := candidate.to_lower()
+		if lower.contains(typed) and lower != typed:
+			suggested.append(candidate)
+	_show_suggested()
+
+
+func _show_suggested() -> void:
 	highlighted = -1
 	if suggested.is_empty():
 		close()
@@ -93,11 +119,17 @@ func close() -> void:
 
 ## Puts suggestion `index` in place of the word at the caret.
 func accept(index: int) -> void:
-	var start := _word_start()
-	var caret := _edit.caret_column
-	_edit.text = _edit.text.left(start) + suggested[index] + _edit.text.substr(caret)
-	_edit.caret_column = start + suggested[index].length()
+	var chosen := suggested[index]
+	if whole_text:
+		_edit.text = chosen
+		_edit.caret_column = chosen.length()
+	else:
+		var start := _word_start()
+		var caret := _edit.caret_column
+		_edit.text = _edit.text.left(start) + chosen + _edit.text.substr(caret)
+		_edit.caret_column = start + chosen.length()
 	close()
+	accepted.emit(_edit.text)
 
 
 ## Under the field, as wide as the field, a few rows high.

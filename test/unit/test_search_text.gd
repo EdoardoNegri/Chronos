@@ -38,3 +38,15 @@ func test_quotes_are_paired_in_any_search_field() -> void:
 	assert_eq(edit.text, "\"\"", "typing a quote adds the closing one")
 	assert_eq(edit.caret_column, 1)
 	assert_eq(changes, ["\"\""] as Array[String], "and the change is reported, since the field would not")
+
+
+func test_needles_leave_out_words_inside_others_and_put_the_longest_first() -> void:
+	assert_eq(SearchText.needles("you decks your"), PackedStringArray(["decks", "your"]), "\"you\" is in \"your\"")
+	assert_eq(SearchText.needles("a a ab"), PackedStringArray(["ab"]), "and repeats go too")
+	assert_eq(SearchText.needles("\"has no\" no"), PackedStringArray(["has no"]))
+	for haystack in ["your deck", "you deck", "a deck"]:
+		assert_eq(
+			SearchText.contains_all(haystack, SearchText.needles("you deck your")),
+			SearchText.contains_all(haystack, SearchText.words("you deck your")),
+			"they find the same as all the words: %s" % haystack
+		)

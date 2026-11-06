@@ -30,6 +30,7 @@ func test_a_tunnel_program_gives_the_address_it_prints() -> void:
 		return
 	var reachability := Reachability.new()
 	reachability.try_router = false
+	reachability.verify = false
 	# Stands in for cloudflared: prints an address, then keeps running like a tunnel does.
 	reachability.program = "cmd.exe"
 	reachability.arguments = PackedStringArray(["/c", "echo https://fake-words.trycloudflare.com 1>&2 & ping -n 30 127.0.0.1 > nul"])
@@ -44,6 +45,7 @@ func test_a_tunnel_program_gives_the_address_it_prints() -> void:
 func test_without_a_tunnel_and_without_asking_the_router_it_says_why() -> void:
 	var reachability := Reachability.new()
 	reachability.try_router = false
+	reachability.verify = false
 	reachability.program = "C:/no/such/folder/tunnel-program.exe"
 	add_child_autofree(reachability)
 	watch_signals(reachability)
@@ -60,6 +62,7 @@ func test_a_tunnel_program_that_ends_without_an_address_is_given_up_on() -> void
 		return
 	var reachability := Reachability.new()
 	reachability.try_router = false
+	reachability.verify = false
 	reachability.program = "cmd.exe"
 	reachability.arguments = PackedStringArray(["/c", "echo no address here 1>&2"])
 	add_child_autofree(reachability)
@@ -107,3 +110,18 @@ func test_a_packed_program_is_unpacked_once_to_a_file_that_can_be_run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(destination.get_base_dir()))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(source))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(folder))
+
+
+func test_a_tunnel_left_running_by_an_earlier_game_is_stopped() -> void:
+	if OS.get_name() != "Windows":
+		pending("uses Windows commands")
+		return
+	# Something that is not the tunnel program, written down as if it were: it must be left alone.
+	var other := OS.create_process("cmd.exe", ["/c", "ping -n 20 127.0.0.1 > nul"])
+	var file := FileAccess.open(Reachability.PID_FILE, FileAccess.WRITE)
+	file.store_string(str(other))
+	file.close()
+	Reachability.stop_leftover_tunnel()
+	assert_true(OS.is_process_running(other), "only the tunnel program is ever stopped")
+	assert_false(FileAccess.file_exists(Reachability.PID_FILE), "and the note is gone")
+	OS.kill(other)

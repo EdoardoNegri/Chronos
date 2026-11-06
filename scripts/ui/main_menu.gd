@@ -29,9 +29,6 @@ func _ready() -> void:
 		button.resized.connect(_center_pivot.bind(button))
 		_center_pivot(button)
 	_play_entrance()
-	# The game was started by opening an invite link: go straight to the screen that follows it.
-	if not Online.pending_invite.is_empty():
-		get_tree().change_scene_to_file.call_deferred(DESTINATIONS[&"PlayButton"])
 
 
 func _on_button_pressed(button: Button) -> void:
