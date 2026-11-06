@@ -3,9 +3,9 @@ extends Node
 ## Works out an address that someone far away can use to reach a server running on this computer,
 ## which a home computer normally cannot be reached on. It tries, in order:
 ##
-## 1. A tunnel: if the `cloudflared` program is next to the game (or installed), it is started and
-##    gives a public https address that leads here. It needs no router settings and no firewall
-##    changes.
+## 1. A tunnel: the `cloudflared` program comes with the game (bin/cloudflared.exe), so it is
+##    started and gives a public https address that leads here. It needs no router settings and no
+##    firewall changes.
 ## 2. The router: it asks the router to open the port (UPnP). Many home routers do; some do not, and
 ##    internet providers that share one address between customers cannot.
 ##
@@ -17,6 +17,10 @@ signal failed(reason: String)
 
 const TUNNEL_SECONDS := 25.0
 const TUNNEL_PROGRAM := "cloudflared"
+## The tunnel program that comes with the game (Windows only), and where an exported game unpacks
+## it: a program cannot be run from inside the game's packed files.
+const BUNDLED_PROGRAM := "res://bin/cloudflared.exe"
+const UNPACKED_PROGRAM := "user://bin/cloudflared.exe"
 
 ## The tunnel program is run with these arguments (a test can run something else in its place).
 var program := ""
@@ -75,13 +79,17 @@ func _exit_tree() -> void:
 	stop()
 
 
-## The tunnel program: next to the game, in the project folder, or on the PATH. "" if there is none.
+## The tunnel program: one put next to the game or in the project folder, else the one that comes
+## with the game, else one on the PATH. "" if there is none.
 static func find_tunnel_program() -> String:
 	var file_name := TUNNEL_PROGRAM + (".exe" if OS.get_name() == "Windows" else "")
 	for folder in [OS.get_executable_path().get_base_dir(), ProjectSettings.globalize_path("res://")]:
 		var candidate := (folder as String).path_join(file_name)
 		if FileAccess.file_exists(candidate):
 			return candidate
+	var bundled := bundled_program()
+	if not bundled.is_empty():
+		return bundled
 	var found: Array = []
 	var command := "where" if OS.get_name() == "Windows" else "which"
 	if OS.execute(command, [TUNNEL_PROGRAM], found) == 0 and not found.is_empty():
@@ -89,6 +97,46 @@ static func find_tunnel_program() -> String:
 		if not first.is_empty():
 			return first
 	return ""
+
+
+## The tunnel program that comes with the game, as a file that can be run, or "" if there is none
+## (or it cannot be unpacked). Run from the editor it is used where it is; an exported game has it
+## inside its packed files, and unpacks it the first time.
+static func bundled_program() -> String:
+	if OS.get_name() != "Windows" or not FileAccess.file_exists(BUNDLED_PROGRAM):
+		return ""
+	var on_disk := ProjectSettings.globalize_path(BUNDLED_PROGRAM)
+	if on_disk.is_absolute_path() and FileAccess.file_exists(on_disk):
+		return on_disk
+	return unpack(BUNDLED_PROGRAM, UNPACKED_PROGRAM)
+
+
+## Copies `source` to `destination` (unless the same file is already there) and returns where it is
+## on disk, or "" if it could not be copied.
+static func unpack(source: String, destination: String) -> String:
+	var target := ProjectSettings.globalize_path(destination)
+	var input := FileAccess.open(source, FileAccess.READ)
+	if input == null:
+		return ""
+	var size := input.get_length()
+	if FileAccess.file_exists(destination):
+		var existing := FileAccess.open(destination, FileAccess.READ)
+		if existing != null and existing.get_length() == size:
+			return target
+	DirAccess.make_dir_recursive_absolute(target.get_base_dir())
+	# Written next to it first, so a copy cut short is never taken for the program.
+	var partial := destination + ".part"
+	var output := FileAccess.open(partial, FileAccess.WRITE)
+	if output == null:
+		return ""
+	while input.get_position() < size:
+		output.store_buffer(input.get_buffer(1 << 20))
+	output.close()
+	DirAccess.remove_absolute(target)
+	if DirAccess.rename_absolute(ProjectSettings.globalize_path(partial), target) != OK:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(partial))
+		return ""
+	return target
 
 
 ## The public address in what a tunnel program printed ("wss://...") or "" if there is none yet.

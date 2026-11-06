@@ -10,10 +10,9 @@ extends RefCounted
 ## web/join.html), which any chat app lets you click and which then opens the game.
 
 const SCHEME := "chronos"
-## Where web/join.html is published, once it is (for example
-## "https://something.pages.dev/join.html"). Empty means there is no such page, and links are only
-## the chronos:// kind.
-const PAGE_URL := ""
+## Where web/join.html is published (by .github/workflows/pages.yml, on GitHub Pages). Empty would
+## mean there is no such page, and links would only be the chronos:// kind.
+const PAGE_URL := "https://edoardonegri.github.io/Chronos/join.html"
 
 
 ## The link for a room, as chronos://join?d=... . `address` is where the host's game can be reached

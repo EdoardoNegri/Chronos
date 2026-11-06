@@ -197,6 +197,19 @@ func test_creating_a_room_starts_it_on_this_computer_with_an_invite_link() -> vo
 	assert_false(scene.online.invite_link.contains("pw"), "without giving the password away")
 
 
+func test_creating_a_room_does_not_rebuild_the_list_once_the_screen_has_left() -> void:
+	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false)
+	# Going to the room screen takes this screen out of the tree at once, and only then does the
+	# lobby send the rooms that are open now.
+	var parent := scene.get_parent()
+	scene.online.hosted.connect(func(_room: RoomInfo) -> void: parent.remove_child(scene))
+	scene._open_host_dialog()
+	(scene.get_node("%RoomNameEdit") as LineEdit).text = "My room"
+	scene._create_room()
+	assert_eq(scene.online.room.room_name, "My room", "the room is open")
+	assert_eq((scene.get_node("%RoomList") as Node).get_child_count(), 0, "and no rows were made off screen")
+
+
 func test_joining_a_room_with_a_password_asks_for_it() -> void:
 	var scene := _make_scene()
 	_show_example_rooms(scene)
@@ -251,25 +264,17 @@ func test_a_notice_waiting_for_the_player_is_shown_once() -> void:
 # --- Invite links --------------------------------------------------------------------------
 
 
-func test_pasting_a_link_joins_the_room_in_it() -> void:
+func test_a_link_opened_while_on_this_screen_joins_the_room_in_it() -> void:
 	var lobby := _make_lobby(Lobby.State.CONNECTED)
 	lobby.server_url = "ws://friend.example:9080"
 	lobby.player_name = "Tester"
 	var scene := _make_scene("Tester", Lobby.State.CONNECTED, false, lobby)
-	var edit: LineEdit = scene.get_node("%LinkEdit")
-	var status: Label = scene.get_node("%Status")
-
-	edit.text = "not a link"
-	scene._join_with_link()
-	assert_string_contains(status.text, "not an invite link")
-
-	edit.text = InviteLink.make("ws://friend.example:9080", &"room_2", "Friend's room", false)
-	scene._join_with_link()
-	assert_eq(edit.text, "", "the box is emptied")
-	assert_string_contains(status.text, "Friend's room", "it says which room it is joining")
-	scene.online.on_join_result(OK, RoomInfo.new(&"room_2", "Friend's room", "Kairos", 2, 2).to_dict(), "Kairos")
-	assert_eq(scene.online.room.room_name, "Friend's room", "and joins it")
-	assert_eq(scene.online.opponent_name, "Kairos")
+	lobby.open_invite(_invite())
+	assert_eq(lobby.pending_invite, {}, "it is used once")
+	assert_string_contains((scene.get_node("%Status") as Label).text, "Friend's room", "it says which room it is joining")
+	lobby.on_join_result(OK, RoomInfo.new(&"room_2", "Friend's room", "Kairos", 2, 2).to_dict(), "Kairos")
+	assert_eq(lobby.room.room_name, "Friend's room", "and joins it")
+	assert_eq(lobby.opponent_name, "Kairos")
 
 
 func test_a_link_to_a_room_with_a_password_asks_for_it_once_connected() -> void:

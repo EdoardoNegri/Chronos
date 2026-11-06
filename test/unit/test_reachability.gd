@@ -68,3 +68,42 @@ func test_a_tunnel_program_that_ends_without_an_address_is_given_up_on() -> void
 	await wait_for_signal(reachability.failed, 8.0)
 	assert_signal_emitted(reachability, "failed")
 	assert_signal_not_emitted(reachability, "address_found")
+
+
+func test_the_game_comes_with_the_tunnel_program_and_finds_it() -> void:
+	if OS.get_name() != "Windows":
+		pending("the tunnel program that comes with the game is the Windows one")
+		return
+	assert_true(FileAccess.file_exists(Reachability.BUNDLED_PROGRAM), "bin/cloudflared.exe is part of the game")
+	var found := Reachability.bundled_program()
+	assert_true(found.is_absolute_path(), "it is a file on disk that can be run")
+	assert_true(FileAccess.file_exists(found))
+	assert_ne(Reachability.find_tunnel_program(), "", "so there is always a tunnel to try")
+
+
+func test_a_packed_program_is_unpacked_once_to_a_file_that_can_be_run() -> void:
+	var folder := "user://test_unpack"
+	var source := folder + "/packed.bin"
+	var destination := folder + "/out/program.bin"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
+	var bytes := PackedByteArray()
+	bytes.resize(3 * 1024 * 1024 + 7)  # more than one piece is copied at a time
+	for i in bytes.size():
+		bytes[i] = i % 251
+	var file := FileAccess.open(source, FileAccess.WRITE)
+	file.store_buffer(bytes)
+	file.close()
+
+	var unpacked := Reachability.unpack(source, destination)
+	assert_eq(unpacked, ProjectSettings.globalize_path(destination), "it says where the file is on disk")
+	assert_eq(FileAccess.get_file_as_bytes(destination), bytes, "the copy is whole")
+	assert_false(FileAccess.file_exists(destination + ".part"), "nothing half-written is left")
+	var modified := FileAccess.get_modified_time(destination)
+	assert_eq(Reachability.unpack(source, destination), unpacked, "the next time it is used as it is")
+	assert_eq(FileAccess.get_modified_time(destination), modified, "without copying it again")
+	assert_eq(Reachability.unpack(folder + "/missing.bin", destination), "", "a missing file is not unpacked")
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(destination))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(destination.get_base_dir()))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(source))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(folder))

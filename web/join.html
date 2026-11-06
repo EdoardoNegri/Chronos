@@ -15,11 +15,10 @@
   h1 { margin: 0 0 .25rem; font-size: 1.6rem; color: #f2cc73; }
   p { margin: .5rem 0; color: #9ea3bd; line-height: 1.45; }
   .room { color: #ebe6d8; font-size: 1.15rem; margin-bottom: 1rem; }
-  a.button, button {
+  a.button {
     display: inline-block; margin-top: 1rem; padding: .8rem 1.6rem; border: 0; border-radius: .6rem;
     background: #d9b35c; color: #17120a; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer;
   }
-  button.secondary { background: #1c2036; color: #ebe6d8; margin-left: .5rem; }
   small { display: block; margin-top: 1.5rem; color: #6f7491; }
   [hidden] { display: none; }
 </style>
@@ -31,9 +30,9 @@
   <div id="ok" hidden>
     <p>Opening the game…</p>
     <a class="button" id="open" href="#">Open Chronos</a>
-    <button class="secondary" id="copy" type="button">Copy link</button>
-    <small>If nothing happens, make sure Chronos is installed on this computer,
-      then press “Open Chronos”. The first time, your browser asks whether it may open it.</small>
+    <small>If nothing happens, press “Open Chronos”. The first time, your browser asks whether it
+      may open it. Chronos has to be installed on this computer, and allowed to open invite links
+      (it asks the first time you go to Play; Settings &gt; Online has a switch for it too).</small>
   </div>
   <div id="bad" hidden>
     <p>This link is incomplete. Ask your friend to send it again.</p>
@@ -53,11 +52,6 @@
   if (packed) {
     document.getElementById("room").textContent = room ? "Room: " + room : "";
     document.getElementById("open").href = link;
-    document.getElementById("copy").onclick = function () {
-      navigator.clipboard.writeText(link).then(function () {
-        document.getElementById("copy").textContent = "Copied";
-      });
-    };
     document.getElementById("ok").hidden = false;
     // Try to open the game straight away.
     setTimeout(function () { location.href = link; }, 400);

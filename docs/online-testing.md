@@ -13,39 +13,40 @@ room.
 
 ### Making the link work from anywhere
 
-The game tries two things to get an address that someone far away can use:
+The game comes with a tunnel program, `cloudflared` (Cloudflare's, in `bin/cloudflared.exe`, with
+its license next to it). When you host, the game starts it by itself and the link works from
+anywhere, with no router or firewall settings and no account. Nothing has to be installed.
 
-- **A tunnel (best).** Put `cloudflared.exe` next to the game (or install it with
-  `winget install Cloudflare.cloudflared`). The game starts it by itself and the link works from
-  anywhere, with no router or firewall settings. Download it from
-  <https://github.com/cloudflare/cloudflared/releases> (the `cloudflared-windows-amd64.exe` file,
-  renamed to `cloudflared.exe`). Only the host needs it.
-- **The router.** Without it, the game asks your router to open a port. Many routers allow it; some
-  do not, and some internet providers make it impossible.
+If the tunnel does not work, the game asks your router to open a port instead. Many routers allow
+it; some do not, and some internet providers make it impossible. If neither works, the link still
+works for people **on the same network as you**, and the note under the link says so.
 
-If neither works, the link still works for people **on the same network as you**, and the note
-under the link says so.
+To update the tunnel program, replace `bin/cloudflared.exe` with a newer
+`cloudflared-windows-amd64.exe` from <https://github.com/cloudflare/cloudflared/releases>.
 
 ## The friend
 
 1. Start the game once and pick a name (no email). When asked whether invite links may open the
    game, answer **Yes, allow**. (Settings > Online has a switch for it too.)
-2. Open the link. The game starts, goes to Play and joins the room. If the room has a password,
-   it asks for it.
-3. If your chat app does not let you click the link, copy it, open **Play** in the game, paste it in
-   the box at the top and press **Join link**.
+2. Click the link. A web page opens and hands it to the game: the game starts, goes to Play and
+   joins the room. If the game is already open, that game comes to the front and joins instead
+   (if you are in a room just then, it joins once you are back on Play). If the room has a
+   password, it asks for it.
 
-## Making links clickable in any chat app
+## How the link opens the game
 
-Many chat apps only let you click web addresses. `web/join.html` is a single page that takes a
-link and opens the game from it. To use it:
+Many chat apps only let you click web addresses, so the link is one:
+`https://edoardonegri.github.io/Chronos/join.html#<room details>`. That page (`web/join.html`)
+opens the game with a `chronos://` link, which Windows passes to the game once invite links are
+switched on. The page has no server part and never sees the room details, which stay in the part
+of the address after `#`.
 
-1. Publish `web/join.html` anywhere that serves static files for free (Cloudflare Pages, GitHub
-   Pages, Netlify). It has no server part and never sees the room details, which stay in the part
-   of the address after `#`.
-2. Put its address in `PAGE_URL` in `scripts/net/invite_link.gd`.
+The page is published by `.github/workflows/pages.yml` whenever `web/` changes on `main`. It needs
+GitHub Pages switched on once: repository **Settings > Pages > Build and deployment > Source:
+GitHub Actions**. Its address is `PAGE_URL` in `scripts/net/invite_link.gd`.
 
-From then on the **Copy link** button gives a web address, which any chat app lets you click.
+A game already open listens on port 47613 on this computer only (`scripts/net/invite_inbox.gd`);
+a game started by a link passes the link to it there and closes.
 
 ## If something goes wrong
 
@@ -53,7 +54,10 @@ From then on the **Copy link** button gives a web address, which any chat app le
   host's network and you are somewhere else (see "Making the link work from anywhere").
 - *"That room is closed."*: the host left the room.
 - *Nothing happens when you click a link*: invite links are not switched on for this computer.
-  Turn them on in Settings > Online, or paste the link into the box in Play.
+  Turn them on in Settings > Online. (The question about it is only asked in an exported game,
+  not when running from the Godot editor.)
+- *The page says "404"*: GitHub Pages is not switched on yet, or the workflow has not run (see
+  "How the link opens the game").
 
 ## A shared list of rooms (optional)
 
@@ -62,7 +66,8 @@ click instead of a link. The server is `scripts/dev/server.ps1`; it is only need
 
 ## Running the game for your friend
 
-Either they open the project in Godot 4.7.2 and press F5, or you export a Windows build
-(Project > Export; install the export templates first from Editor > Manage Export Templates). Turn
-on **Embed PCK** so the build is one `.exe`, and add `*.json` and `official_cards/*` to the filter
-for non-resource files so the card files come along.
+Either they open the project in Godot 4.7.2 and press F5, or you export a Windows build: install
+the export templates once (Editor > Manage Export Templates), then Project > Export > **Windows
+Desktop** > Export Project. The preset (`export_presets.cfg`) is already set up: the build is one
+`build/Chronos.exe` that carries the card files and the tunnel program, which the game unpacks into
+its own data folder the first time someone hosts.

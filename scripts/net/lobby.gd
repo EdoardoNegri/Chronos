@@ -30,6 +30,9 @@ signal room_closed
 signal chat_received(from_name: String, text: String)
 ## The invite link of the room I am hosting here changed (or is ready, or could not be made).
 signal link_changed
+## An invite link was opened while the game was already running (see InviteInbox). It waits in
+## pending_invite for the Play screen to follow it.
+signal invite_opened
 
 enum State { OFFLINE, CONNECTING, CONNECTED }
 
@@ -59,7 +62,8 @@ var room: RoomInfo
 var opponent_name := ""
 ## Something the player should be told when they get back to the room list, once.
 var notice := ""
-## An invite link the game was started with (by opening a link), waiting to be used. {} if none.
+## An invite link the game was started with, or that was opened while it ran, waiting to be used.
+## {} if none.
 var pending_invite: Dictionary = {}
 
 # --- Hosting from this computer ------------------------------------------------------------
@@ -101,6 +105,12 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	args.append_array(OS.get_cmdline_args())
 	pending_invite = InviteLink.find_in(args)
+
+
+## An invite link was opened while the game was running: it waits to be followed (invite_opened).
+func open_invite(invite: Dictionary) -> void:
+	pending_invite = invite
+	invite_opened.emit()
 
 
 func _exit_tree() -> void:
