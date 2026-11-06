@@ -90,3 +90,29 @@ func test_leaving_empties_the_room() -> void:
 	scene._leave()
 	assert_null(scene.online.room, "the player is out of the room")
 	assert_eq(scene.online.opponent_name, "")
+
+
+func test_a_room_hosted_here_shows_the_invite_link_and_a_guest_does_not() -> void:
+	var guest := _make_scene("Bob")
+	assert_false((guest.get_node("%InvitePanel") as Control).visible, "a guest has no link to send")
+
+	var host := _make_scene()
+	host.online.is_player = true
+	host.online.link_note = "Making your invite link…"
+	host.online.link_changed.emit()
+	host._invite_panel.visible = host.online.is_player
+	var panel: Control = host.get_node("%InvitePanel")
+	assert_true(panel.visible)
+	assert_true((host.get_node("%CopyLinkButton") as Button).disabled, "nothing to copy while it is being made")
+	assert_eq((host.get_node("%LinkEdit") as LineEdit).placeholder_text, "Making your invite link…")
+
+	host.online.invite_link = "chronos://join?d=abc"
+	host.online.link_note = "Only people on your own network can use this link."
+	host.online.link_changed.emit()
+	assert_eq((host.get_node("%LinkEdit") as LineEdit).text, "chronos://join?d=abc")
+	assert_false((host.get_node("%CopyLinkButton") as Button).disabled)
+	assert_string_contains((host.get_node("%LinkNote") as Label).text, "own network")
+
+	(host.get_node("%CopyLinkButton") as Button).pressed.emit()
+	assert_string_contains((host.get_node("%LinkNote") as Label).text, "Copied")
+	host.online.is_player = false

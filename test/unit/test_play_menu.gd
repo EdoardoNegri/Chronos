@@ -1,6 +1,7 @@
 extends GutTest
 
 const TEST_PROFILE_PATH := "user://test_play_profile/profile.cfg"
+const SHARED_SERVER := "ws://shared.example:9080"
 
 
 func after_each() -> void:
@@ -8,15 +9,26 @@ func after_each() -> void:
 	DirAccess.remove_absolute(TEST_PROFILE_PATH.get_base_dir())
 
 
-## The room browser with its own profile (one with this name, or none at all for a first visit) and
-## its own lobby, in the given state. It does not connect anywhere or leave the screen.
-func _make_scene(player_name := "Tester", state := Lobby.State.CONNECTED) -> Control:
+## A lobby for a screen to use. It looks for no public address, so hosting is quick and local.
+func _make_lobby(state := Lobby.State.OFFLINE) -> Lobby:
 	var lobby := Lobby.new()
+	lobby.find_public_address = false
 	add_child_autofree(lobby)
 	lobby.state = state
+	return lobby
+
+
+## The room browser with its own profile (one with this name, or none at all for a first visit) and
+## its own lobby, in the given state. It does not connect anywhere or leave the screen. With
+## `with_server` the profile names a shared server to list rooms from, which is not so by default.
+func _make_scene(player_name := "Tester", state := Lobby.State.CONNECTED, with_server := true, lobby: Lobby = null) -> Control:
+	if lobby == null:
+		lobby = _make_lobby(state)
 	var profile: PlayerProfile = autofree(PlayerProfile.new(TEST_PROFILE_PATH))
 	if not player_name.is_empty():
 		profile.set_player_name(player_name)
+	if with_server:
+		profile.set_server_url(SHARED_SERVER)
 	var scene: Control = load("res://scenes/play.tscn").instantiate()
 	scene.profile = profile
 	scene.online = lobby
@@ -39,6 +51,10 @@ func _listed(scene: Control) -> Array[String]:
 		if not row.is_queued_for_deletion():
 			names.append((row.get_node("%RoomName") as Label).text)
 	return names
+
+
+func _invite(locked := false, address := "ws://friend.example:9080") -> Dictionary:
+	return InviteLink.parse(InviteLink.make(address, &"room_2", "Friend's room", locked))
 
 
 func test_the_first_visit_asks_for_a_name_and_nothing_else() -> void:
@@ -97,7 +113,7 @@ func test_the_list_shows_only_rooms_with_a_free_seat() -> void:
 	assert_does_not_have(locked, "Temporal Rift")
 
 
-func test_the_list_follows_what_the_server_sends() -> void:
+func test_the_list_follows_what_a_shared_server_sends() -> void:
 	var scene := _make_scene()
 	assert_true((scene.get_node("%EmptyLabel") as Label).visible, "no rooms yet")
 	assert_string_contains((scene.get_node("%EmptyLabel") as Label).text, "Host one")
@@ -107,13 +123,21 @@ func test_the_list_follows_what_the_server_sends() -> void:
 	assert_true((scene.get_node("%EmptyLabel") as Label).visible, "a room that is taken drops off")
 
 
-func test_without_a_server_the_list_says_why() -> void:
-	var scene := _make_scene("Tester", Lobby.State.OFFLINE)
+func test_with_no_shared_server_the_list_says_how_to_play_with_a_friend() -> void:
+	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false)
 	var empty: Label = scene.get_node("%EmptyLabel")
 	assert_true(empty.visible)
+	assert_string_contains(empty.text, "Host a room")
+	assert_string_contains(empty.text, "link")
+	assert_false((scene.get_node("%HostButton") as Button).disabled, "hosting needs no server")
+
+
+func test_when_the_shared_server_is_not_there_the_list_says_why() -> void:
+	var scene := _make_scene("Tester", Lobby.State.OFFLINE)
+	var empty: Label = scene.get_node("%EmptyLabel")
 	assert_string_contains(empty.text, "Not connected")
 	assert_string_contains(empty.text, "Settings", "and where to fix it")
-	assert_true((scene.get_node("%HostButton") as Button).disabled, "no rooms can be opened")
+	assert_false((scene.get_node("%HostButton") as Button).disabled, "but a friend's room can still be hosted")
 
 	scene.online.error_text = "Could not reach the server at ws://x."
 	scene.online.state_changed.emit()
@@ -122,10 +146,6 @@ func test_without_a_server_the_list_says_why() -> void:
 	scene.online.state = Lobby.State.CONNECTING
 	scene.online.state_changed.emit()
 	assert_string_contains(empty.text, "Connecting")
-
-	scene.online.state = Lobby.State.CONNECTED
-	scene.online.state_changed.emit()
-	assert_false((scene.get_node("%HostButton") as Button).disabled, "with a server rooms can be opened")
 
 
 func test_play_menu_hosts_a_room_in_the_chosen_game_mode() -> void:
@@ -147,8 +167,8 @@ func test_the_host_dialog_has_a_password_and_no_player_count() -> void:
 	assert_eq(password.text, "", "no password unless one is typed")
 
 
-func test_creating_a_room_waits_for_the_server_and_then_goes_to_it() -> void:
-	var scene := _make_scene()
+func test_creating_a_room_starts_it_on_this_computer_with_an_invite_link() -> void:
+	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false)
 	var overlay: Control = scene.get_node("%HostOverlay")
 	var create: Button = scene.get_node("%CreateButton")
 	var error: Label = scene.get_node("%FormError")
@@ -156,23 +176,25 @@ func test_creating_a_room_waits_for_the_server_and_then_goes_to_it() -> void:
 
 	(scene.get_node("%RoomNameEdit") as LineEdit).text = "   "
 	scene._create_room()
-	assert_ne(error.text, "", "an empty name is refused before asking the server")
+	assert_ne(error.text, "", "an empty name is refused")
 	assert_false(create.disabled)
+	assert_false(scene.online.is_server, "and no server was started for it")
 
-	(scene.get_node("%RoomNameEdit") as LineEdit).text = "Taken name"
-	scene._create_room()
-	assert_true(create.disabled, "it waits for the server's answer")
-	scene.online.on_hosted({}, "A room with that name already exists.")
-	assert_eq(error.text, "A room with that name already exists.", "the server's reason is shown")
+	scene.online.host_failed.emit("Could not start a server on this computer.")
+	assert_eq(error.text, "Could not start a server on this computer.", "a reason from the lobby is shown")
 	assert_false(create.disabled, "and the player can try again")
-	assert_true(overlay.visible)
 
-	var entered := [false]
-	scene.online.hosted.connect(func(_room: RoomInfo) -> void: entered[0] = true)
-	scene.online.on_hosted(RoomInfo.new(&"room_5", "Taken name", "Tester", 1, 2).to_dict(), "")
+	(scene.get_node("%RoomNameEdit") as LineEdit).text = "My room"
+	(scene.get_node("%PasswordEdit") as LineEdit).text = "pw"
+	scene._create_room()
 	assert_false(overlay.visible, "the dialog closes when the room is open")
-	assert_true(entered[0])
-	assert_eq(scene.online.room.room_name, "Taken name")
+	assert_true(scene.online.is_player, "the room runs on this computer")
+	assert_eq(scene.online.room.room_name, "My room")
+	assert_true(scene.online.room.has_password())
+	var link := InviteLink.parse(scene.online.invite_link)
+	assert_eq(link["room_id"], str(scene.online.room.id), "the link is for this room")
+	assert_true(link["locked"], "and says it has a password")
+	assert_false(scene.online.invite_link.contains("pw"), "without giving the password away")
 
 
 func test_joining_a_room_with_a_password_asks_for_it() -> void:
@@ -219,16 +241,173 @@ func test_a_room_that_was_just_taken_is_explained() -> void:
 
 
 func test_a_notice_waiting_for_the_player_is_shown_once() -> void:
-	var lobby := Lobby.new()
-	add_child_autofree(lobby)
+	var lobby := _make_lobby()
 	lobby.notice = "The host closed the room."
-	var profile: PlayerProfile = autofree(PlayerProfile.new(TEST_PROFILE_PATH))
-	profile.set_player_name("Tester")
-	var scene: Control = load("res://scenes/play.tscn").instantiate()
-	scene.profile = profile
-	scene.online = lobby
-	scene.auto_connect = false
-	scene.change_scenes = false
-	add_child_autofree(scene)
+	var scene := _make_scene("Tester", Lobby.State.OFFLINE, true, lobby)
 	assert_eq((scene.get_node("%Status") as Label).text, "The host closed the room.")
 	assert_eq(lobby.notice, "", "it is not shown again")
+
+
+# --- Invite links --------------------------------------------------------------------------
+
+
+func test_pasting_a_link_joins_the_room_in_it() -> void:
+	var lobby := _make_lobby(Lobby.State.CONNECTED)
+	lobby.server_url = "ws://friend.example:9080"
+	lobby.player_name = "Tester"
+	var scene := _make_scene("Tester", Lobby.State.CONNECTED, false, lobby)
+	var edit: LineEdit = scene.get_node("%LinkEdit")
+	var status: Label = scene.get_node("%Status")
+
+	edit.text = "not a link"
+	scene._join_with_link()
+	assert_string_contains(status.text, "not an invite link")
+
+	edit.text = InviteLink.make("ws://friend.example:9080", &"room_2", "Friend's room", false)
+	scene._join_with_link()
+	assert_eq(edit.text, "", "the box is emptied")
+	assert_string_contains(status.text, "Friend's room", "it says which room it is joining")
+	scene.online.on_join_result(OK, RoomInfo.new(&"room_2", "Friend's room", "Kairos", 2, 2).to_dict(), "Kairos")
+	assert_eq(scene.online.room.room_name, "Friend's room", "and joins it")
+	assert_eq(scene.online.opponent_name, "Kairos")
+
+
+func test_a_link_to_a_room_with_a_password_asks_for_it_once_connected() -> void:
+	var lobby := _make_lobby(Lobby.State.OFFLINE)
+	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false, lobby)
+	var overlay: Control = scene.get_node("%JoinOverlay")
+	scene._start_invite(_invite(true))
+	assert_false(overlay.visible, "not before the host has been reached")
+	lobby.state = Lobby.State.CONNECTED
+	lobby.state_changed.emit()
+	assert_true(overlay.visible, "then the password is asked for")
+	assert_string_contains((scene.get_node("%JoinRoomLabel") as Label).text, "Friend's room")
+
+	lobby.on_join_result(ERR_UNAUTHORIZED, {}, "")
+	assert_ne((scene.get_node("%JoinError") as Label).text, "")
+	assert_true(overlay.visible, "a wrong password can be tried again")
+	lobby.on_join_result(OK, RoomInfo.new(&"room_2", "Friend's room", "Kairos", 2, 2, false, false, "pw").to_dict(), "Kairos")
+	assert_false(overlay.visible)
+	assert_eq(lobby.room.room_name, "Friend's room")
+
+
+func test_cancelling_the_password_question_gives_up_on_the_link() -> void:
+	var lobby := _make_lobby(Lobby.State.OFFLINE)
+	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false, lobby)
+	scene._start_invite(_invite(true))
+	lobby.state = Lobby.State.CONNECTED
+	lobby.state_changed.emit()
+	(scene.get_node("%CancelJoinButton") as Button).pressed.emit()
+	assert_false((scene.get_node("%JoinOverlay") as Control).visible)
+	assert_eq(scene._invite, {}, "nothing is followed any more")
+
+
+func test_a_host_that_cannot_be_reached_is_said_so() -> void:
+	var lobby := _make_lobby(Lobby.State.OFFLINE)
+	var scene := _make_scene("Tester", Lobby.State.OFFLINE, false, lobby)
+	scene._start_invite(_invite())
+	lobby.state = Lobby.State.CONNECTING
+	lobby.state_changed.emit()
+	lobby.state = Lobby.State.OFFLINE
+	lobby.state_changed.emit()
+	var status := (scene.get_node("%Status") as Label).text
+	assert_string_contains(status, "Could not reach")
+	assert_string_contains(status, "Friend's room")
+
+
+func test_a_room_that_is_gone_is_said_so_when_following_a_link() -> void:
+	var lobby := _make_lobby(Lobby.State.CONNECTED)
+	lobby.server_url = "ws://friend.example:9080"
+	lobby.player_name = "Tester"
+	var scene := _make_scene("Tester", Lobby.State.CONNECTED, false, lobby)
+	scene._start_invite(_invite())
+	lobby.on_join_result(ERR_DOES_NOT_EXIST, {}, "")
+	assert_string_contains((scene.get_node("%Status") as Label).text, "closed")
+	assert_eq(scene._invite, {})
+
+
+func test_a_link_the_game_was_started_with_is_followed() -> void:
+	var lobby := _make_lobby(Lobby.State.CONNECTED)
+	lobby.server_url = "ws://friend.example:9080"
+	lobby.player_name = "Tester"
+	lobby.pending_invite = _invite()
+	var scene := _make_scene("Tester", Lobby.State.CONNECTED, false, lobby)
+	assert_eq(lobby.pending_invite, {}, "it is used once")
+	assert_string_contains((scene.get_node("%Status") as Label).text, "Joining")
+	lobby.on_join_result(OK, RoomInfo.new(&"room_2", "Friend's room", "Kairos", 2, 2).to_dict(), "Kairos")
+	assert_eq(lobby.room.room_name, "Friend's room")
+
+
+func test_a_link_opened_before_there_is_a_name_waits_for_one() -> void:
+	var lobby := _make_lobby(Lobby.State.CONNECTED)
+	lobby.server_url = "ws://friend.example:9080"
+	lobby.pending_invite = _invite()
+	var scene := _make_scene("", Lobby.State.CONNECTED, false, lobby)
+	assert_true((scene.get_node("%AccountOverlay") as Control).visible, "the name comes first")
+	assert_eq(scene._invite, {}, "the link has not been followed yet")
+	var edit: LineEdit = scene.get_node("%AccountNameEdit")
+	edit.text = "Kairos"
+	edit.text_submitted.emit("Kairos")
+	assert_eq(scene._invite["room_id"], "room_2", "and then the link is followed")
+
+
+# --- The question about opening invite links -----------------------------------------------
+
+
+## Stands in for the real link setup, which would change the registry.
+class FakeLinks:
+	extends LinkHandler
+	var registered := false
+
+	func is_supported() -> bool:
+		return true
+
+	func register() -> Error:
+		registered = true
+		return OK
+
+
+func _links_dialog(scene: Control) -> ConfirmationDialog:
+	for child in scene.get_children():
+		if child is ConfirmationDialog:
+			return child
+	return null
+
+
+func test_the_game_asks_before_it_lets_links_open_it() -> void:
+	var scene := _make_scene()
+	var fake := FakeLinks.new()
+	scene.links = fake
+	scene._offer_links_once(true)
+	var dialog := _links_dialog(scene)
+	assert_not_null(dialog, "the question is shown")
+	assert_true(dialog.visible)
+	assert_false(fake.registered, "nothing is changed until the player says yes")
+	assert_eq(dialog.ok_button_text, "Yes, allow")
+	assert_eq(dialog.cancel_button_text, "Not now")
+	assert_string_contains(dialog.dialog_text, "Settings", "it says it can be turned off again")
+
+	dialog.confirmed.emit()
+	assert_true(fake.registered, "yes sets links up")
+	assert_true(scene.profile.links_setup_done, "and it is not asked again")
+	assert_string_contains((scene.get_node("%Status") as Label).text, "now open Chronos")
+
+
+func test_saying_not_now_changes_nothing_and_is_not_asked_again() -> void:
+	var scene := _make_scene()
+	var fake := FakeLinks.new()
+	scene.links = fake
+	scene._offer_links_once(true)
+	_links_dialog(scene).canceled.emit()
+	assert_false(fake.registered)
+	assert_true(scene.profile.links_setup_done)
+	var before := scene.get_child_count()
+	scene._offer_links_once()
+	assert_eq(scene.get_child_count(), before, "the question is not asked again")
+
+
+func test_the_question_is_not_asked_when_running_from_the_editor() -> void:
+	var scene := _make_scene()
+	scene.links = FakeLinks.new()
+	scene._offer_links_once()
+	assert_null(_links_dialog(scene), "only the real game asks")

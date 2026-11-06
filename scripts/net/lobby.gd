@@ -1,15 +1,19 @@
 class_name Lobby
 extends Node
-## The online lobby, where players find each other. One script plays both parts, because Godot's
-## remote calls (@rpc) need the same node, with the same script, on both ends of a connection:
+## The online lobby, where players find each other. One script plays all the parts, because
+## Godot's remote calls (@rpc) need the same node, with the same script, on both ends of a
+## connection:
 ##
-## - On the lobby server (see lobby_server.tscn) it keeps the rooms (a LobbyState), answers what
-##   players ask for, tells the other player in a room what happens, and passes chat between them.
-## - In the game (the `Online` autoload) it connects to a server, keeps the last list of open rooms
-##   it was sent, and says what happens through signals.
+## - A *server* keeps the rooms (a LobbyState), answers what players ask for, tells the other player
+##   in a room what happens, and passes chat between them. It runs either on its own (see
+##   lobby_server.tscn) or inside the game of the player who hosts a room, which is how a link
+##   works: host_here() starts the server in the host's game, and the link leads to it.
+## - A *player* connects to a server (connect_to_server), keeps the last list of open rooms it was
+##   sent, and says what happens through signals. The host of a room is a player too: their game
+##   talks to its own server directly instead of over the network.
 ##
 ## The connection is a WebSocket, so it also works through a web tunnel such as Cloudflare's, which
-## is how someone far away can reach a server running on a home computer.
+## is how someone far away reaches a game running on a home computer (see Reachability).
 
 signal state_changed
 signal rooms_changed
@@ -24,16 +28,22 @@ signal opponent_left
 ## The host left, so the room I was in is gone.
 signal room_closed
 signal chat_received(from_name: String, text: String)
+## The invite link of the room I am hosting here changed (or is ready, or could not be made).
+signal link_changed
 
 enum State { OFFLINE, CONNECTING, CONNECTED }
 
 ## The server is always peer 1 in Godot's multiplayer.
 const SERVER_ID := 1
 const DEFAULT_PORT := 9080
+## When a port is busy, the next ones are tried.
+const PORT_TRIES := 20
 const CONNECT_SECONDS := 10.0
 ## Something is sent now and then, so a tunnel does not close a connection it thinks is idle.
 const PING_SECONDS := 20.0
 const MAX_CHAT_LENGTH := 200
+## After the host leaves, the server stays up this long, so the other player is told first.
+const CLOSE_DELAY := 0.6
 
 # --- The game's side -----------------------------------------------------------------------
 
@@ -49,12 +59,27 @@ var room: RoomInfo
 var opponent_name := ""
 ## Something the player should be told when they get back to the room list, once.
 var notice := ""
+## An invite link the game was started with (by opening a link), waiting to be used. {} if none.
+var pending_invite: Dictionary = {}
+
+# --- Hosting from this computer ------------------------------------------------------------
+
+## The link to send to a friend, once it is made ("" until then), and a note about it, such as
+## "Making your invite link…" or why it only works on this network.
+var invite_link := ""
+var link_note := ""
+## Whether to look for an address someone far away can use (tests turn it off).
+var find_public_address := true
+var hosting_port := 0
 
 # --- The server's side ---------------------------------------------------------------------
 
 var is_server := false
+## True when the server runs inside the game of the player who is hosting (see host_here).
+var is_player := false
 
 var _lobby := LobbyState.new()
+var _reachability: Reachability
 var _connect_timer: Timer
 var _ping_timer: Timer
 
@@ -72,6 +97,19 @@ func _ready() -> void:
 	_ping_timer.wait_time = PING_SECONDS
 	_ping_timer.timeout.connect(_ping)
 	add_child(_ping_timer)
+	# Opening a link starts the game with the link as an argument.
+	var args := OS.get_cmdline_user_args()
+	args.append_array(OS.get_cmdline_args())
+	pending_invite = InviteLink.find_in(args)
+
+
+func _exit_tree() -> void:
+	stop_hosting()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		stop_hosting()
 
 
 # =============================================================================================
@@ -79,7 +117,7 @@ func _ready() -> void:
 # =============================================================================================
 
 
-## Starts listening for players on `port`. Returns an error if it cannot.
+## Starts a server on its own, listening for players on `port`. Returns an error if it cannot.
 func start_server(port := DEFAULT_PORT) -> Error:
 	var peer := WebSocketMultiplayerPeer.new()
 	var error := peer.create_server(port)
@@ -92,67 +130,40 @@ func start_server(port := DEFAULT_PORT) -> Error:
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_hello(requested_name: String) -> void:
-	if not is_server:
-		return
-	var peer := multiplayer.get_remote_sender_id()
-	var error := _lobby.register(peer, requested_name)
-	on_hello_result.rpc_id(peer, error)
-	if error.is_empty():
-		on_rooms.rpc_id(peer, _lobby.directory.open_snapshot())
+	if is_server:
+		_serve_hello(multiplayer.get_remote_sender_id(), requested_name)
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_rooms() -> void:
 	if is_server and _lobby.is_registered(multiplayer.get_remote_sender_id()):
-		on_rooms.rpc_id(multiplayer.get_remote_sender_id(), _lobby.directory.open_snapshot())
+		_tell(multiplayer.get_remote_sender_id(), &"on_rooms", [_lobby.directory.open_snapshot()])
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_host(room_name: String, custom_cards: bool, password: String) -> void:
-	if not is_server:
-		return
-	var peer := multiplayer.get_remote_sender_id()
-	var result := _lobby.host(peer, room_name, custom_cards, password)
-	if result.has("error"):
-		on_hosted.rpc_id(peer, {}, result["error"])
-		return
-	on_hosted.rpc_id(peer, (result["room"] as RoomInfo).to_dict(), "")
-	_send_rooms_to_everyone()
+	if is_server:
+		_serve_host(multiplayer.get_remote_sender_id(), room_name, custom_cards, password)
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_join(room_id: String, password: String) -> void:
-	if not is_server:
-		return
-	var peer := multiplayer.get_remote_sender_id()
-	var result := _lobby.join(peer, StringName(room_id), password)
-	if result.has("error"):
-		on_join_result.rpc_id(peer, int(result["error"]), {}, "")
-		return
-	var joined_room: RoomInfo = result["room"]
-	var host_peer: int = result["host_peer"]
-	on_join_result.rpc_id(peer, OK, joined_room.to_dict(), joined_room.host_name)
-	on_opponent_joined.rpc_id(host_peer, _lobby.name_of(peer))
-	_send_rooms_to_everyone()
+	if is_server:
+		_serve_join(multiplayer.get_remote_sender_id(), room_id, password)
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_leave() -> void:
 	if is_server:
-		_tell_other_player(_lobby.leave(multiplayer.get_remote_sender_id()))
+		_serve_leave(multiplayer.get_remote_sender_id())
 
 
 ## Passes a chat line to the other player in the room. (Whatever the game needs to send between
 ## two players later goes the same way.)
 @rpc("any_peer", "call_remote", "reliable")
 func request_chat(text: String) -> void:
-	if not is_server:
-		return
-	var peer := multiplayer.get_remote_sender_id()
-	var other := _lobby.opponent_of(peer)
-	var clean := text.strip_edges().left(MAX_CHAT_LENGTH)
-	if other != 0 and not clean.is_empty():
-		on_chat.rpc_id(other, _lobby.name_of(peer), clean)
+	if is_server:
+		_serve_chat(multiplayer.get_remote_sender_id(), text)
 
 
 @rpc("any_peer", "call_remote", "unreliable")
@@ -160,10 +171,55 @@ func request_ping() -> void:
 	pass
 
 
-func _on_peer_disconnected(peer: int) -> void:
-	if not is_server:
+# What the server does with each request. `peer` is who asked: another player's peer id, or
+# SERVER_ID for the host playing from the same computer.
+
+
+func _serve_hello(peer: int, requested_name: String) -> void:
+	var error := _lobby.register(peer, requested_name)
+	_tell(peer, &"on_hello_result", [error])
+	if error.is_empty():
+		_tell(peer, &"on_rooms", [_lobby.directory.open_snapshot()])
+
+
+func _serve_host(peer: int, room_name: String, custom_cards: bool, password: String) -> void:
+	if is_player and peer != SERVER_ID:
+		_tell(peer, &"on_hosted", [{}, "Only the person running this server can open a room."])
 		return
-	_tell_other_player(_lobby.unregister(peer))
+	var result := _lobby.host(peer, room_name, custom_cards, password)
+	if result.has("error"):
+		_tell(peer, &"on_hosted", [{}, result["error"]])
+		return
+	_tell(peer, &"on_hosted", [(result["room"] as RoomInfo).to_dict(), ""])
+	_send_rooms_to_everyone()
+
+
+func _serve_join(peer: int, room_id: String, password: String) -> void:
+	var result := _lobby.join(peer, StringName(room_id), password)
+	if result.has("error"):
+		_tell(peer, &"on_join_result", [int(result["error"]), {}, ""])
+		return
+	var joined_room: RoomInfo = result["room"]
+	var host_peer: int = result["host_peer"]
+	_tell(peer, &"on_join_result", [OK, joined_room.to_dict(), joined_room.host_name])
+	_tell(host_peer, &"on_opponent_joined", [_lobby.name_of(peer)])
+	_send_rooms_to_everyone()
+
+
+func _serve_leave(peer: int) -> void:
+	_tell_other_player(_lobby.leave(peer))
+
+
+func _serve_chat(peer: int, text: String) -> void:
+	var other := _lobby.opponent_of(peer)
+	var clean := text.strip_edges().left(MAX_CHAT_LENGTH)
+	if other != 0 and not clean.is_empty():
+		_tell(other, &"on_chat", [_lobby.name_of(peer), clean])
+
+
+func _on_peer_disconnected(peer: int) -> void:
+	if is_server:
+		_tell_other_player(_lobby.unregister(peer))
 
 
 ## After someone left a room (see LobbyState.leave): tells the other player, then everyone the
@@ -173,17 +229,139 @@ func _tell_other_player(left: Dictionary) -> void:
 		return
 	var other: int = left["other"]
 	if other != 0:
-		if left["closed"]:
-			on_room_closed.rpc_id(other)
-		else:
-			on_opponent_left.rpc_id(other)
+		_tell(other, &"on_room_closed" if left["closed"] else &"on_opponent_left", [])
 	_send_rooms_to_everyone()
 
 
 func _send_rooms_to_everyone() -> void:
 	var snapshot := _lobby.directory.open_snapshot()
 	for peer in _lobby.registered_peers():
-		on_rooms.rpc_id(peer, snapshot)
+		_tell(peer, &"on_rooms", [snapshot])
+
+
+## Sends a message to a player: over the network, or straight to this game if it is the host's.
+func _tell(peer: int, method: StringName, args: Array) -> void:
+	if peer == SERVER_ID:
+		if is_player:
+			callv(method, args)
+		return
+	callv("rpc_id", [peer, method] + args)
+
+
+## A server on its own, as opposed to one inside a host's game: nobody plays on it.
+func _is_dedicated() -> bool:
+	return is_server and not is_player
+
+
+# =============================================================================================
+# Hosting from this computer
+# =============================================================================================
+
+
+## Opens a room that runs on this computer: starts a server here, opens the room on it, and works
+## out an invite link for it (see invite_link, link_changed). The answer is `hosted` or
+## `host_failed`. The server stops when the host leaves the room.
+func host_here(who: String, room_name: String, custom_cards: bool, password: String) -> void:
+	var error := RoomDirectory.check_room_name(room_name)
+	if error.is_empty() and password.length() > RoomDirectory.MAX_PASSWORD_LENGTH:
+		error = "That password is too long."
+	if not error.is_empty():
+		host_failed.emit(error)
+		return
+	disconnect_from_server()
+	stop_hosting()
+	if _listen_on_a_free_port() != OK:
+		host_failed.emit("Could not start a server on this computer.")
+		return
+	is_player = true
+	player_name = who
+	invite_link = ""
+	link_note = "Making your invite link…"
+	_lobby.register(SERVER_ID, who)
+	_set_state(State.CONNECTED)
+	_serve_host(SERVER_ID, room_name, custom_cards, password)
+	if room == null:
+		stop_hosting()
+		return
+	_start_link()
+
+
+## Stops hosting from this computer: closes the server, the tunnel and the port that were opened.
+func stop_hosting() -> void:
+	if _reachability != null:
+		_reachability.stop()
+		_reachability.queue_free()
+		_reachability = null
+	if not is_player:
+		return
+	if multiplayer.multiplayer_peer != null:
+		multiplayer.multiplayer_peer.close()
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	is_server = false
+	is_player = false
+	hosting_port = 0
+	_lobby = LobbyState.new()
+	room = null
+	opponent_name = ""
+	invite_link = ""
+	link_note = ""
+	_set_state(State.OFFLINE)
+	link_changed.emit()
+
+
+func _listen_on_a_free_port() -> Error:
+	for offset in PORT_TRIES:
+		var peer := WebSocketMultiplayerPeer.new()
+		if peer.create_server(DEFAULT_PORT + offset) == OK:
+			multiplayer.multiplayer_peer = peer
+			is_server = true
+			hosting_port = DEFAULT_PORT + offset
+			return OK
+	return ERR_CANT_CREATE
+
+
+func _start_link() -> void:
+	link_changed.emit()
+	if not find_public_address:
+		_use_local_link("")
+		return
+	_reachability = Reachability.new()
+	add_child(_reachability)
+	_reachability.address_found.connect(_on_address_found)
+	_reachability.failed.connect(_on_address_failed)
+	_reachability.start(hosting_port)
+
+
+func _on_address_found(address: String, _how: String) -> void:
+	_set_link(address, "")
+
+
+## Without a public address the link still works for people on the same network.
+func _on_address_failed(reason: String) -> void:
+	_use_local_link(reason)
+
+
+func _use_local_link(reason: String) -> void:
+	var note := "Only people on your own network can use this link."
+	if not reason.is_empty():
+		note += " " + reason
+	_set_link("ws://%s:%d" % [_local_address(), hosting_port], note)
+
+
+func _set_link(address: String, note: String) -> void:
+	if room == null:
+		return
+	invite_link = InviteLink.make_best(address, room.id, room.room_name, room.locked)
+	link_note = note
+	link_changed.emit()
+
+
+## This computer's address on the home network (or "127.0.0.1" if it has none).
+static func _local_address() -> String:
+	for address in IP.get_local_addresses():
+		if address.count(".") == 3 and Reachability.is_private_address(address) and not address.begins_with("127.") and not address.begins_with("169.254."):
+			return address
+	return "127.0.0.1"
 
 
 # =============================================================================================
@@ -219,6 +397,7 @@ static func normalize_url(text: String) -> String:
 ## Connects to a lobby server as `who`. The result comes through state_changed: CONNECTED once the
 ## server has accepted the name, or OFFLINE with error_text saying why not.
 func connect_to_server(url: String, who: String) -> Error:
+	stop_hosting()
 	disconnect_from_server()
 	var address := normalize_url(url)
 	if address.is_empty():
@@ -238,15 +417,19 @@ func connect_to_server(url: String, who: String) -> Error:
 	return OK
 
 
-## Leaves the server (and any room).
+## Leaves the server (and any room). Does nothing to a server that runs on this computer; see
+## stop_hosting for that.
 func disconnect_from_server() -> void:
 	_connect_timer.stop()
 	_ping_timer.stop()
-	if multiplayer.multiplayer_peer != null and not is_server:
+	if is_server:
+		return
+	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	_forget_everything()
-	_set_state(State.OFFLINE)
+	if state != State.OFFLINE:
+		_set_state(State.OFFLINE)
 
 
 func is_connected_to_server() -> bool:
@@ -272,7 +455,8 @@ func refresh() -> void:
 		request_rooms.rpc_id(SERVER_ID)
 
 
-## Opens a room. The answer is `hosted` or `host_failed`.
+## Opens a room on the server this game is connected to. The answer is `hosted` or `host_failed`.
+## (To host from this computer instead, see host_here.)
 func host_room(room_name: String, custom_cards: bool, password: String) -> void:
 	if state != State.CONNECTED:
 		host_failed.emit("You are not connected to a server.")
@@ -290,8 +474,15 @@ func join_room(room_id: StringName, password: String) -> void:
 		request_join.rpc_id(SERVER_ID, str(room_id), password)
 
 
-## Leaves the room I am in (closing it if it is mine).
+## Leaves the room I am in (closing it if it is mine; a room hosted from this computer also stops
+## its server shortly after, once the other player has been told).
 func leave_room() -> void:
+	if is_player:
+		_serve_leave(SERVER_ID)
+		room = null
+		opponent_name = ""
+		get_tree().create_timer(CLOSE_DELAY).timeout.connect(stop_hosting)
+		return
 	if state == State.CONNECTED and room != null and _server_reachable():
 		request_leave.rpc_id(SERVER_ID)
 	room = null
@@ -300,13 +491,15 @@ func leave_room() -> void:
 
 ## Says something to the other player in my room.
 func send_chat(text: String) -> void:
-	if state == State.CONNECTED and room != null and _server_reachable():
+	if is_player and room != null:
+		_serve_chat(SERVER_ID, text)
+	elif state == State.CONNECTED and room != null and _server_reachable():
 		request_chat.rpc_id(SERVER_ID, text)
 
 
 @rpc("authority", "call_remote", "reliable")
 func on_hello_result(error: String) -> void:
-	if is_server:
+	if _is_dedicated():
 		return
 	_connect_timer.stop()
 	if error.is_empty():
@@ -319,7 +512,7 @@ func on_hello_result(error: String) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func on_rooms(snapshot: Array) -> void:
-	if is_server:
+	if _is_dedicated():
 		return
 	rooms.replace_from_snapshot(snapshot)
 	rooms_changed.emit()
@@ -327,7 +520,7 @@ func on_rooms(snapshot: Array) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func on_hosted(room_data: Dictionary, error: String) -> void:
-	if is_server:
+	if _is_dedicated():
 		return
 	if not error.is_empty():
 		host_failed.emit(error)
@@ -339,7 +532,7 @@ func on_hosted(room_data: Dictionary, error: String) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func on_join_result(error: int, room_data: Dictionary, host_name: String) -> void:
-	if is_server:
+	if _is_dedicated():
 		return
 	if error != OK:
 		join_failed.emit(error)
@@ -351,7 +544,7 @@ func on_join_result(error: int, room_data: Dictionary, host_name: String) -> voi
 
 @rpc("authority", "call_remote", "reliable")
 func on_opponent_joined(who: String) -> void:
-	if is_server:
+	if _is_dedicated():
 		return
 	opponent_name = who
 	opponent_joined.emit(who)
@@ -359,7 +552,7 @@ func on_opponent_joined(who: String) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func on_opponent_left() -> void:
-	if is_server:
+	if _is_dedicated():
 		return
 	opponent_name = ""
 	opponent_left.emit()
@@ -367,7 +560,7 @@ func on_opponent_left() -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func on_room_closed() -> void:
-	if is_server:
+	if _is_dedicated():
 		return
 	room = null
 	opponent_name = ""
@@ -377,7 +570,7 @@ func on_room_closed() -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func on_chat(from_name: String, text: String) -> void:
-	if not is_server:
+	if not _is_dedicated():
 		chat_received.emit(from_name, text)
 
 
@@ -404,7 +597,7 @@ func _on_server_disconnected() -> void:
 
 
 func _ping() -> void:
-	if state == State.CONNECTED:
+	if state == State.CONNECTED and _server_reachable():
 		request_ping.rpc_id(SERVER_ID)
 
 

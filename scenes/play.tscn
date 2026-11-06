@@ -67,6 +67,24 @@ layout_mode = 2
 theme_type_variation = &"PrimaryButton"
 text = "Host Room"
 
+[node name="LinkRow" type="HBoxContainer" parent="Content/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LinkEdit" type="LineEdit" parent="Content/Layout/LinkRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "A friend's invite link. Opening one outside the game does the same."
+placeholder_text = "Got an invite link? Paste it here and press Join link"
+clear_button_enabled = true
+
+[node name="JoinLinkButton" type="Button" parent="Content/Layout/LinkRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Join link"
+
 [node name="ListPanel" type="PanelContainer" parent="Content/Layout"]
 layout_mode = 2
 size_flags_vertical = 3

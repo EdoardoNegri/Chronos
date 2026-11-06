@@ -1,11 +1,13 @@
 extends Control
-## Room browser: search the open online rooms (ones with a free seat), join one, or host a new one.
-## Games are between two players.
+## Online play: host a room, or join one with a friend's invite link. Games are between two players.
 ##
-## The rooms come from the lobby server (see Lobby). The first time the player comes here they are
-## asked for a name (see PlayerProfile), which is all the account there is. A room can have a
-## password, which the host sets and a player joining has to type. Once a room is opened or joined,
-## the room screen takes over.
+## Hosting runs the room on the host's own computer and makes an invite link for it (see Lobby and
+## InviteLink); joining is opening that link, pasted here or clicked outside the game, which starts
+## the game and brings the player to this screen to join. If a shared server is set in the
+## settings, its open rooms are listed too, to join with a click. The first time the player comes
+## here they are asked for a name (see PlayerProfile), which is all the account there is. A room can
+## have a password, which the host sets and a player joining has to type. Once a room is opened or
+## joined, the room screen takes over.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const ROOM_SCENE := "res://scenes/room.tscn"
@@ -23,15 +25,24 @@ var online: Lobby = Online
 ## room is opened or joined. (Tests turn these off.)
 var auto_connect := true
 var change_scenes := true
+## Makes invite links open this game (Windows only). A test gives one that changes nothing.
+var links := LinkHandler.new()
 
 ## The room the password dialog is asking about.
 var _joining_id: StringName
 var _joining_name := ""
+## The invite link being followed ({} if none), and whether the connection to its host has started.
+## A link opened before the player has a name waits in `_waiting_invite` until they have one.
+var _invite: Dictionary = {}
+var _invite_started := false
+var _waiting_invite: Dictionary = {}
 
 @onready var _content: Control = %Content
 @onready var _search_edit: LineEdit = %SearchEdit
 @onready var _refresh_button: Button = %RefreshButton
 @onready var _host_button: Button = %HostButton
+@onready var _link_edit: LineEdit = %LinkEdit
+@onready var _join_link_button: Button = %JoinLinkButton
 @onready var _back_button: Button = %BackButton
 @onready var _scroll: ScrollContainer = %Scroll
 @onready var _room_list: VBoxContainer = %RoomList
@@ -70,13 +81,15 @@ func _ready() -> void:
 	_room_name_edit.text_changed.connect(func(_text: String) -> void: _form_error.text = "")
 	_password_edit.text_submitted.connect(func(_text: String) -> void: _create_room())
 	_confirm_join_button.pressed.connect(_confirm_join)
-	_cancel_join_button.pressed.connect(_close_overlay.bind(_join_overlay))
+	_cancel_join_button.pressed.connect(_cancel_join)
+	_join_link_button.pressed.connect(_join_with_link)
+	_link_edit.text_submitted.connect(func(_text: String) -> void: _join_with_link())
 	_join_password_edit.text_submitted.connect(func(_text: String) -> void: _confirm_join())
 	_join_password_edit.text_changed.connect(func(_text: String) -> void: _join_error.text = "")
 	_account_continue_button.pressed.connect(_create_account)
 	_account_name_edit.text_submitted.connect(func(_text: String) -> void: _create_account())
 	_account_name_edit.text_changed.connect(func(_text: String) -> void: _account_error.text = "")
-	online.state_changed.connect(_rebuild_list)
+	online.state_changed.connect(_on_state_changed)
 	online.rooms_changed.connect(_rebuild_list)
 	online.hosted.connect(_on_hosted)
 	online.host_failed.connect(_on_host_failed)
@@ -85,10 +98,16 @@ func _ready() -> void:
 	if not online.notice.is_empty():
 		_show_status(online.notice, STATUS_COLOR)
 		online.notice = ""
+	# A link the game was started with (the friend opened it) is followed once there is a name.
+	if not online.pending_invite.is_empty():
+		_waiting_invite = online.pending_invite
+		online.pending_invite = {}
 	_rebuild_list()
 	if profile.has_account():
 		_search_edit.grab_focus()
+		_offer_links_once()
 		_ensure_connected()
+		_follow_waiting_invite()
 	else:
 		_open_overlay(_account_overlay, _account_name_edit)
 
@@ -120,7 +139,7 @@ func _on_search_changed(_text: String) -> void:
 
 ## Connects to the server from the settings, unless that is already done (or being done).
 func _ensure_connected(force := false) -> void:
-	if not auto_connect or not profile.has_account():
+	if not auto_connect or not profile.has_account() or profile.server_url.strip_edges().is_empty():
 		return
 	var up_to_date := (
 		online.server_url == Lobby.normalize_url(profile.server_url)
@@ -143,7 +162,6 @@ func _refresh() -> void:
 func _rebuild_list() -> void:
 	for row in _room_list.get_children():
 		row.queue_free()
-	_host_button.disabled = online.state != Lobby.State.CONNECTED
 	var query := _search_edit.text.strip_edges()
 	var rooms := online.rooms.get_rooms(_search_edit.text, true)
 	for room in rooms:
@@ -158,9 +176,11 @@ func _rebuild_list() -> void:
 		_empty_label.text = _empty_text(query)
 
 
-## What the list says when there is nothing in it: why the server is not there, or that there are
-## no rooms.
+## What the list says when there is nothing in it: how to get a game going, or why the shared
+## server is not there, or that it has no rooms.
 func _empty_text(query: String) -> String:
+	if profile.server_url.strip_edges().is_empty():
+		return "Host a room and send your friend the invite link,\nor paste a friend's link above to join theirs."
 	match online.state:
 		Lobby.State.CONNECTING:
 			return "Connecting to the server…"
@@ -170,6 +190,109 @@ func _empty_text(query: String) -> String:
 	if not query.is_empty():
 		return "No open rooms match “%s”." % query
 	return "No open rooms right now. Host one!"
+
+
+## The connection changed: the list says how it is going, and an invite link being followed moves on.
+func _on_state_changed() -> void:
+	_rebuild_list()
+	if _invite.is_empty():
+		return
+	match online.state:
+		Lobby.State.CONNECTING:
+			_invite_started = true
+		Lobby.State.CONNECTED:
+			_join_invited_room()
+		Lobby.State.OFFLINE:
+			if _invite_started:
+				_show_status("Could not reach %s. The host may have closed it, or is not online." % _invite_name(), ERROR_COLOR)
+				_invite = {}
+
+
+# --- Invite links --------------------------------------------------------------------------
+
+
+## The one-time question whether invite links may open this game. It is only asked in the real
+## game (not from the editor), nothing is changed unless the player says yes, and it can be turned
+## on or off any time in the settings.
+func _offer_links_once(force := false) -> void:
+	if not links.is_supported() or (not force and (profile.links_setup_done or OS.has_feature("editor"))):
+		return
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Open invite links with Chronos?"
+	dialog.dialog_text = (
+		"When a friend sends you an invite link, clicking it can start the game and take you into their room.\n\n"
+		+ "This adds one entry for your Windows user (no administrator rights needed). "
+		+ "You can turn it off any time in Settings."
+	)
+	dialog.ok_button_text = "Yes, allow"
+	dialog.cancel_button_text = "Not now"
+	dialog.confirmed.connect(_allow_links)
+	dialog.confirmed.connect(profile.mark_links_setup_done)
+	dialog.canceled.connect(profile.mark_links_setup_done)
+	dialog.visibility_changed.connect(func() -> void: if not dialog.visible: dialog.queue_free())
+	add_child(dialog)
+	dialog.popup_centered()
+
+
+func _allow_links() -> void:
+	if links.register() == OK:
+		_show_status("Invite links now open Chronos.", SUCCESS_COLOR)
+	else:
+		_show_status("Could not set up invite links. You can try again in Settings.", ERROR_COLOR)
+
+
+## Joins the room in the link typed or pasted in the box.
+func _join_with_link() -> void:
+	var invite := InviteLink.parse(_link_edit.text)
+	if invite.is_empty():
+		_show_status("That is not an invite link.", ERROR_COLOR)
+		return
+	_link_edit.clear()
+	if not profile.has_account():
+		_waiting_invite = invite
+		return
+	_start_invite(invite)
+
+
+func _follow_waiting_invite() -> void:
+	if _waiting_invite.is_empty():
+		return
+	var invite := _waiting_invite
+	_waiting_invite = {}
+	_start_invite(invite)
+
+
+## Connects to the host in a link. When the connection is up, the room is joined (see
+## _join_invited_room).
+func _start_invite(invite: Dictionary) -> void:
+	_invite = invite
+	_invite_started = false
+	_joining_id = StringName(invite["room_id"])
+	_joining_name = _invite_name()
+	_show_status("Joining “%s”…" % _joining_name, STATUS_COLOR)
+	var address := Lobby.normalize_url(invite["address"])
+	if online.state == Lobby.State.CONNECTED and online.server_url == address and online.player_name == profile.player_name:
+		_join_invited_room()
+		return
+	if auto_connect:
+		online.connect_to_server(address, profile.player_name)
+
+
+## What to call the room in a link when talking to the player.
+func _invite_name() -> String:
+	var room_name: String = _invite.get("room_name", "")
+	return room_name if not room_name.is_empty() else "the room"
+
+
+## Connected to the host: asks for the password if the room has one, otherwise joins at once.
+func _join_invited_room() -> void:
+	if _invite.get("locked", false):
+		_join_room_label.text = "“%s” has a password." % _invite_name()
+		_join_password_edit.text = ""
+		_join_error.text = ""
+		_open_overlay(_join_overlay, _join_password_edit)
+		return
+	online.join_room(_joining_id, "")
 
 
 # --- Name ----------------------------------------------------------------------------------
@@ -183,7 +306,9 @@ func _create_account() -> void:
 		return
 	_close_overlay(_account_overlay)
 	_show_status("Welcome, %s. You can change your name in Settings." % profile.player_name, SUCCESS_COLOR)
+	_offer_links_once()
 	_ensure_connected()
+	_follow_waiting_invite()
 
 
 # --- Joining -------------------------------------------------------------------------------
@@ -208,8 +333,18 @@ func _confirm_join() -> void:
 
 
 func _on_joined(_room: RoomInfo) -> void:
+	_invite = {}
 	_close_overlay(_join_overlay)
 	_go_to_room()
+
+
+## Cancelling the password question gives up on an invite link too.
+func _cancel_join() -> void:
+	_close_overlay(_join_overlay)
+	if not _invite.is_empty():
+		_invite = {}
+		online.disconnect_from_server()
+		_show_status("", STATUS_COLOR)
 
 
 ## A wrong password keeps the dialog open to try again; anything else closes it and says why.
@@ -219,6 +354,8 @@ func _on_join_failed(error: int) -> void:
 		_join_password_edit.select_all()
 		return
 	_close_overlay(_join_overlay)
+	var was_invite := not _invite.is_empty()
+	_invite = {}
 	match error:
 		ERR_BUSY:
 			_show_status("“%s” is full or already in a game." % _joining_name, ERROR_COLOR)
@@ -227,8 +364,12 @@ func _on_join_failed(error: int) -> void:
 		ERR_CONNECTION_ERROR:
 			_show_status("You are not connected to a server.", ERROR_COLOR)
 		_:
-			_show_status("That room no longer exists.", ERROR_COLOR)
-			_refresh()
+			_show_status("That room is closed.", ERROR_COLOR)
+			if not was_invite:
+				_refresh()
+	if was_invite:
+		# Nothing more to do on the host's computer.
+		online.disconnect_from_server()
 
 
 # --- Hosting -------------------------------------------------------------------------------
@@ -250,9 +391,9 @@ func _create_room() -> void:
 		_form_error.text = error
 		return
 	var custom_cards := _game_mode_option.get_item_text(_game_mode_option.selected) == RoomInfo.MODE_CUSTOM
-	# The server answers with hosted or host_failed.
+	# The room runs on this computer; hosted or host_failed comes back at once.
 	_create_button.disabled = true
-	online.host_room(_room_name_edit.text.strip_edges(), custom_cards, _password_edit.text)
+	online.host_here(profile.player_name, _room_name_edit.text.strip_edges(), custom_cards, _password_edit.text)
 
 
 func _on_hosted(_room: RoomInfo) -> void:

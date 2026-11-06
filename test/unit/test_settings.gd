@@ -128,3 +128,40 @@ func test_settings_lets_the_player_choose_the_server() -> void:
 	edit.text = "wss://typed.example"
 	settings.close()
 	assert_eq(settings.profile.server_url, "wss://typed.example", "an address typed but not confirmed still counts")
+
+
+## Stands in for the real link setup, which would change the registry.
+class FakeLinks:
+	extends LinkHandler
+	var registered := false
+
+	func is_supported() -> bool:
+		return true
+
+	func is_registered() -> bool:
+		return registered
+
+	func register() -> Error:
+		registered = true
+		return OK
+
+	func unregister() -> Error:
+		registered = false
+		return OK
+
+
+func test_settings_can_turn_invite_links_on_and_off() -> void:
+	var fake := FakeLinks.new()
+	var profile: PlayerProfile = autofree(PlayerProfile.new(TEST_PROFILE_PATH))
+	var settings: Control = load("res://scenes/settings.tscn").instantiate()
+	settings.profile = profile
+	settings.links = fake
+	add_child_autofree(settings)
+	var check: CheckButton = settings.get_node("%LinksCheck")
+	assert_true(check.visible)
+	assert_false(check.button_pressed, "links are off until the player turns them on")
+	check.button_pressed = true
+	assert_true(fake.registered)
+	assert_string_contains((settings.get_node("%LinksStatus") as Label).text, "On")
+	check.button_pressed = false
+	assert_false(fake.registered)

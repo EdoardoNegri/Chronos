@@ -1,6 +1,7 @@
 extends Control
 ## The room a player has opened or joined: who is in it, and a chat between the two players, which
-## is also a way to see that the connection works. (The game itself will take place here.) Leaving
+## is also a way to see that the connection works. (The game itself will take place here.) The host
+## of a room that runs on their computer also sees its invite link to send to a friend. Leaving
 ## goes back to the room list; if the host leaves, the room closes.
 
 const PLAY_SCENE := "res://scenes/play.tscn"
@@ -25,6 +26,10 @@ var _opponent := ""
 @onready var _send_button: Button = %SendButton
 @onready var _leave_button: Button = %LeaveButton
 @onready var _back_button: Button = %BackButton
+@onready var _invite_panel: Control = %InvitePanel
+@onready var _link_edit: LineEdit = %LinkEdit
+@onready var _copy_link_button: Button = %CopyLinkButton
+@onready var _link_note: Label = %LinkNote
 
 
 func _ready() -> void:
@@ -36,6 +41,11 @@ func _ready() -> void:
 		# Nothing to show: the room is gone.
 		_leave.call_deferred()
 		return
+	# A room hosted from this computer shows the link to send to a friend.
+	_invite_panel.visible = online.is_player
+	_copy_link_button.pressed.connect(_copy_link)
+	online.link_changed.connect(_show_link)
+	_show_link()
 	online.opponent_joined.connect(_on_opponent_joined)
 	online.opponent_left.connect(_on_opponent_left)
 	online.room_closed.connect(_on_room_closed)
@@ -73,6 +83,22 @@ func _leave() -> void:
 func _go_to_play() -> void:
 	if change_scenes:
 		get_tree().change_scene_to_file(PLAY_SCENE)
+
+
+## Shows the invite link, or that it is being made, with a note if it has a catch.
+func _show_link() -> void:
+	var has_link := not online.invite_link.is_empty()
+	_link_edit.text = online.invite_link
+	_link_edit.placeholder_text = "" if has_link else online.link_note
+	_copy_link_button.disabled = not has_link
+	_link_note.text = online.link_note if has_link else ""
+	_link_note.visible = not _link_note.text.is_empty()
+
+
+func _copy_link() -> void:
+	DisplayServer.clipboard_set(online.invite_link)
+	_link_note.text = "Copied. Send it to your friend."
+	_link_note.visible = true
 
 
 func _send() -> void:

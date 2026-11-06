@@ -14,9 +14,17 @@ var profile: PlayerProfile = Profile
 @onready var _name_status: Label = %NameStatus
 @onready var _server_edit: LineEdit = %ServerEdit
 @onready var _server_status: Label = %ServerStatus
+@onready var _links_check: CheckButton = %LinksCheck
+@onready var _links_status: Label = %LinksStatus
+
+## Makes invite links open this game (Windows only). A test gives one for a made-up kind of link.
+var links := LinkHandler.new()
 
 
 func _ready() -> void:
+	_links_check.visible = links.is_supported()
+	_links_check.button_pressed = links.is_registered()
+	_links_check.toggled.connect(_set_links)
 	_server_edit.text = profile.server_url
 	_server_edit.text_submitted.connect(func(_text: String) -> void: _apply_server())
 	_server_edit.focus_exited.connect(_apply_server)
@@ -55,6 +63,22 @@ func _apply_server() -> void:
 		_show_server_status("Saved. Press Refresh in Play to connect.", SUCCESS_COLOR)
 	else:
 		_show_server_status(error, ERROR_COLOR)
+
+
+## Turns on or off opening invite links with this game.
+func _set_links(on: bool) -> void:
+	var error := links.register() if on else links.unregister()
+	if error == OK:
+		_show_links_status("On: invite links open this game." if on else "Off.", SUCCESS_COLOR)
+	else:
+		_show_links_status("Could not change this.", ERROR_COLOR)
+		# Show what is really so.
+		_links_check.set_pressed_no_signal(links.is_registered())
+
+
+func _show_links_status(text: String, color: Color) -> void:
+	_links_status.text = text
+	_links_status.add_theme_color_override("font_color", color)
 
 
 func _show_server_status(text: String, color: Color) -> void:

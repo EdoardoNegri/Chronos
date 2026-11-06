@@ -11,15 +11,16 @@ signal name_changed(new_name: String)
 
 const DEFAULT_PATH := "user://profile.cfg"
 const MAX_NAME_LENGTH := 20
-## Where the lobby server is until the player says otherwise: this computer. There is no public
-## server yet, so to play with someone else one of you runs the server (see Lobby) and both put its
-## address in the settings.
-const DEFAULT_SERVER_URL := "ws://127.0.0.1:9080"
+## An optional shared server to list rooms from. There is none by default: rooms are hosted by the
+## players themselves and joined with an invite link, so nobody has to set a server up.
+const DEFAULT_SERVER_URL := ""
 
 var path: String
 ## Empty until the player has picked a name (that is, has no account yet).
 var player_name := ""
 var server_url := DEFAULT_SERVER_URL
+## Whether the game has already made its one-time offer to open invite links (see LinkHandler).
+var links_setup_done := false
 
 var _file := ConfigFile.new()
 
@@ -31,6 +32,7 @@ func _init(profile_path: String = DEFAULT_PATH) -> void:
 		var saved_server := str(_file.get_value("online", "server", "")).strip_edges()
 		if not saved_server.is_empty():
 			server_url = saved_server
+		links_setup_done = bool(_file.get_value("online", "links_setup_done", false))
 
 
 ## Whether the player has picked a name yet.
@@ -76,6 +78,13 @@ func set_server_url(new_url: String) -> String:
 	if error.is_empty():
 		server_url = trimmed
 	return error
+
+
+## Remembers that the one-time offer to open invite links has been made, so it is not made again.
+func mark_links_setup_done() -> void:
+	_file.set_value("online", "links_setup_done", true)
+	if _save().is_empty():
+		links_setup_done = true
 
 
 func _save() -> String:
