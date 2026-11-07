@@ -37,28 +37,23 @@ func _section_rules(section: Node) -> Node:
 	return section.get_child(1).get_child(0).get_child(0)
 
 
-func test_ideas_have_no_alternatives() -> void:
-	for section in GameRules.SECTIONS:
-		for rule: Dictionary in section["rules"]:
-			if rule.get("idea", false):
-				assert_false(rule.has("alternatives"), "idea \"%s\" has no alternatives" % rule["title"])
-
-
-func test_rules_scene_labels_ideas_and_skips_them_in_numbering() -> void:
+func test_rules_scene_numbers_rules_and_alternatives_share_the_number() -> void:
 	var scene: Control = load("res://scenes/rules.tscn").instantiate()
 	add_child_autofree(scene)
 	var list: VBoxContainer = scene.get_node("%RuleList")
-	var time_index := -1
 	for i in GameRules.SECTIONS.size():
-		if GameRules.SECTIONS[i]["title"] == "Time":
-			time_index = i
-	assert_ne(time_index, -1, "there is a Time section")
-	var labels: Array[String] = []
-	for rule in _section_rules(list.get_child(time_index)).get_children():
-		var number_label: Label = rule.get_child(0).get_child(0)
-		labels.append(number_label.text)
-	var n := time_index + 1
-	assert_eq(labels, ["%d.1." % n, "%d.2." % n, "%d.3." % n, "%d.4." % n, "Idea:"])
+		var expected: Array[String] = []
+		var rules: Array = GameRules.SECTIONS[i]["rules"]
+		for r in rules.size():
+			var number := "%d.%d." % [i + 1, r + 1]
+			expected.append(number)
+			for _alternative in (rules[r] as Dictionary).get("alternatives", []):
+				expected.append(number)
+		var labels: Array[String] = []
+		for rule in _section_rules(list.get_child(i)).get_children():
+			var number_label: Label = rule.get_child(0).get_child(0)
+			labels.append(number_label.text)
+		assert_eq(labels, expected, "section %d" % (i + 1))
 
 
 func _titles(found: Array[Dictionary]) -> Array[String]:
@@ -148,20 +143,20 @@ func test_rules_search_quotes_mean_an_exact_phrase() -> void:
 func test_rules_search_counts_spaces_only_inside_quotes() -> void:
 	var scene: Control = load("res://scenes/rules.tscn").instantiate()
 	add_child_autofree(scene)
-	# "Free cards with a catch" says "your opponent" but never the word "you" on its own, and
-	# "Point budget" says "your points".
+	# "Draw" says "your deck" but never the word "you" on its own, and "Point budget" says
+	# "your points".
 	var loose := _titles(scene.search("you"))
-	assert_has(loose, "Free cards with a catch", "a loose word also matches inside longer words")
+	assert_has(loose, "Draw", "a loose word also matches inside longer words")
 	assert_has(loose, "Point budget")
 
 	var with_space := _titles(scene.search("\"you \""))
 	assert_has(with_space, "Point budget", "\"you \" finds the word you")
-	assert_does_not_have(with_space, "Free cards with a catch", "the space keeps \"your\" out")
+	assert_does_not_have(with_space, "Draw", "the space keeps \"your\" out")
 	assert_eq(_titles(scene.search("\"YOU \"")), with_space, "quoted text still ignores case")
 
 	var partial := _titles(scene.search("\"your p\""))
 	assert_has(partial, "Point budget", "\"your p\" finds \"your points\"")
-	assert_does_not_have(partial, "Free cards with a catch")
+	assert_does_not_have(partial, "Draw")
 	assert_eq(scene.search("\"your  p\"").size(), 0, "two spaces in quotes are two spaces")
 
 	assert_eq(_titles(scene.search("  you   ")), loose, "spaces outside quotes are ignored")

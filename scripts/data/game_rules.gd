@@ -5,8 +5,7 @@ extends RefCounted
 ## Undecided values are marked inline as {note}; the UI shows them in blue and in parentheses.
 ## A sub-rule can list `alternatives`: other versions under consideration. They keep the number
 ## of the rule they would replace and are shown in a different color.
-## A sub-rule marked `"idea": true` is a design idea, not a rule: it gets no number and is shown
-## in its own color.
+## Design ideas that are not rules live in docs/ideas.md, not here.
 
 const SECTIONS: Array[Dictionary] = [
 	{
@@ -81,11 +80,6 @@ Mulliganing second: the opponent decides their mulligan first and tells you how 
 			{
 				"title": "Forced draw",
 				"text": "You can pay 100 time {amount not decided yet} to draw a card: the timer moves 100 toward you. If you have no other action available, you must do this. Trying to draw from an empty deck makes you lose.",
-			},
-			{
-				"title": "Free cards with a catch",
-				"idea": true,
-				"text": "A card can cost 0 time and still carry a drawback or a punishment. For example, a spell that costs 0 but moves the timer 10 toward your opponent.",
 			},
 		],
 	},

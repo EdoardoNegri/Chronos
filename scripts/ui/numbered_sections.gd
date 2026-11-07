@@ -46,7 +46,7 @@ static func make_section(number: int, title: String, search_text := "") -> Dicti
 	}
 
 
-## Adds an item to a section: "1.2. Title" ("Idea: Title", or just "Title" for number "") in
+## Adds an item to a section: "1.2. Title" (just "Title" for number "") in
 ## `accent`, with `content` in a box of style `row_style` underneath. `search_text` is what the
 ## search looks through besides the number and title. Returns the item, to keep more in it.
 static func add_item(

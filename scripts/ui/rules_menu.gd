@@ -1,7 +1,6 @@
 extends Control
 ## Rulebook screen: shows the numbered sections and sub-rules from GameRules, each section in its
-## own box (see NumberedSections, which the settings share). Ideas are not rules, so they take no
-## number and are labeled "Idea" instead.
+## own box (see NumberedSections, which the settings share).
 ##
 ## The search bar filters the rulebook in place: a sub-rule stays only if its number, title or
 ## text contains every word searched for (ignoring case), and a section with none left is hidden.
@@ -15,7 +14,6 @@ extends Control
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const GOLD := NumberedSections.GOLD
 const ALT_COLOR := Color(0.45, 0.78, 0.88)
-const IDEA_COLOR := Color(0.74, 0.64, 0.95)
 
 ## The rulebook as built, for the search (see NumberedSections). Each rule also keeps its "text"
 ## and "body" (its text label, where the searched words are shown).
@@ -60,20 +58,16 @@ func _go_back() -> void:
 func _build_section(number: int, section: Dictionary) -> Control:
 	var entry := NumberedSections.make_section(number, section["title"], _plain("%d %s" % [number, section["title"]]))
 	_sections.append(entry)
-	var rule_count := 0
-	for rule: Dictionary in section["rules"]:
-		if rule.get("idea", false):
-			_add_rule(entry, "Idea", rule, IDEA_COLOR, &"IdeaRuleRow")
-			continue
-		rule_count += 1
-		var rule_number := "%d.%d" % [number, rule_count]
+	for i in section["rules"].size():
+		var rule: Dictionary = section["rules"][i]
+		var rule_number := "%d.%d" % [number, i + 1]
 		_add_rule(entry, rule_number, rule, GOLD, &"RuleRow")
 		for alternative: Dictionary in rule.get("alternatives", []):
 			_add_rule(entry, rule_number, alternative, ALT_COLOR, &"AlternativeRuleRow")
 	return entry["control"]
 
 
-## A rule as "1.2. Title" (or "Idea: Title") with its text in a box underneath.
+## A rule as "1.2. Title" with its text in a box underneath.
 func _add_rule(section: Dictionary, number: String, rule: Dictionary, accent: Color, row_style: StringName) -> void:
 	var body := NumberedSections.make_body()
 	var item := NumberedSections.add_item(section, number, rule["title"], body, _plain(rule["text"]), accent, row_style)
