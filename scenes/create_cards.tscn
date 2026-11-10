@@ -154,7 +154,7 @@ theme_override_constants/separation = 4
 [node name="Label" type="Label" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow/PointsField"]
 layout_mode = 2
 theme_type_variation = &"FieldLabel"
-text = "Deck points (not printed)"
+text = "Deck points"
 
 [node name="PointsInput" type="PanelContainer" parent="Content/Layout/Body/LeftColumn/FormPanel/FormMargin/FormScroll/FormPadding/Form/CostRow/PointsField"]
 unique_name_in_owner = true
