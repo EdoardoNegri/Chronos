@@ -176,47 +176,50 @@ horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 3
 
-[node name="DetailPanel" type="PanelContainer" parent="Content/Layout"]
+[node name="DetailBody" type="HBoxContainer" parent="Content/Layout"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_constants/separation = 40
+
+[node name="DetailPanel" type="PanelContainer" parent="Content/Layout/DetailBody"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_type_variation = &"Card"
 
-[node name="DetailMargin" type="MarginContainer" parent="Content/Layout/DetailPanel"]
+[node name="DetailMargin" type="MarginContainer" parent="Content/Layout/DetailBody/DetailPanel"]
 layout_mode = 2
 theme_override_constants/margin_left = 20
 theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 20
+theme_override_constants/margin_right = 1
 theme_override_constants/margin_bottom = 20
 
-[node name="DetailRow" type="HBoxContainer" parent="Content/Layout/DetailPanel/DetailMargin"]
+[node name="InfoScroll" type="ScrollContainer" parent="Content/Layout/DetailBody/DetailPanel/DetailMargin"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="InfoPadding" type="MarginContainer" parent="Content/Layout/DetailBody/DetailPanel/DetailMargin/InfoScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_right = 11
+
+[node name="DetailInfo" type="VBoxContainer" parent="Content/Layout/DetailBody/DetailPanel/DetailMargin/InfoScroll/InfoPadding"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 28
+size_flags_horizontal = 3
+theme_override_constants/separation = 18
 
-[node name="DetailImage" type="TextureRect" parent="Content/Layout/DetailPanel/DetailMargin/DetailRow"]
+[node name="DetailImage" type="TextureRect" parent="Content/Layout/DetailBody"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
 size_flags_vertical = 3
 texture_filter = 4
 expand_mode = 1
 stretch_mode = 5
-
-[node name="InfoScroll" type="ScrollContainer" parent="Content/Layout/DetailPanel/DetailMargin/DetailRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-horizontal_scroll_mode = 0
-
-[node name="DetailColumn" type="VBoxContainer" parent="Content/Layout/DetailPanel/DetailMargin/DetailRow/InfoScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 18
-
-[node name="DetailInfo" type="VBoxContainer" parent="Content/Layout/DetailPanel/DetailMargin/DetailRow/InfoScroll/DetailColumn"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 18
 
 [node name="BackButton" type="Button" parent="."]
 unique_name_in_owner = true

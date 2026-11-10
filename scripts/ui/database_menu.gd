@@ -1,10 +1,10 @@
 extends Control
 ## Card database. It opens on a search form: fill in what you are looking for, choose how to
 ## show and sort the results, and press Search (or Enter in a text field). The results are a page
-## of their own; opening a card shows it large next to a table with its name and time cost, type,
-## text, attack / defense and deck points. The back arrow (or Escape) goes from a card to the
-## results, from the results back to the form as it was filled in, and from the form to the main
-## menu. Clear empties the form.
+## of their own; opening a card shows it large on the right, as in Create Cards, with a box on
+## the left holding its name and time cost, type, text, attack / defense and deck points. The
+## back arrow (or Escape) goes from a card to the results, from the results back to the form as
+## it was filled in, and from the form to the main menu. Clear empties the form.
 ##
 ## The search form itself is a CardSearchForm, which the deck builder uses too.
 
@@ -67,8 +67,8 @@ var _flow_item_ratio := 0.0
 @onready var _results_scroll: ScrollContainer = %ResultsScroll
 @onready var _results_box: VBoxContainer = %Results
 @onready var _empty_label: Label = %EmptyLabel
+@onready var _detail_body: HBoxContainer = %DetailBody
 @onready var _detail_panel: Control = %DetailPanel
-@onready var _detail_row: HBoxContainer = %DetailRow
 @onready var _detail_image: TextureRect = %DetailImage
 @onready var _detail_info: VBoxContainer = %DetailInfo
 
@@ -86,7 +86,7 @@ func _ready() -> void:
 	_clear_button.pressed.connect(_clear_form)
 	_form.submitted.connect(_search_from_form)
 	_results_box.resized.connect(_fit_flow)
-	_detail_row.resized.connect(_fit_detail_image)
+	_detail_body.resized.connect(_fit_detail_image)
 
 	_load_library()
 	_show_page("form")
@@ -131,7 +131,7 @@ func _show_page(page: String) -> void:
 	_actions.visible = page == "form"
 	_form_panel.visible = page == "form"
 	_results_panel.visible = page == "results"
-	_detail_panel.visible = page == "detail"
+	_detail_body.visible = page == "detail"
 
 
 # --- Searching -----------------------------------------------------------------------------
@@ -375,11 +375,16 @@ func _find_card(card_id: String) -> CardData:
 	return null
 
 
-## The card picture fills the height, at card proportions, using at most 45% of the width.
+## Sized like the preview in Create Cards: as wide as a card that fills the full height, leaving
+## the info box on the left at least its minimum width, and at most 60% of the row.
 func _fit_detail_image() -> void:
-	var face_size := Vector2(CardLibrary.FACE_SIZE)
-	var width := _detail_row.size.y * face_size.x / face_size.y
-	_detail_image.custom_minimum_size.x = minf(width, _detail_row.size.x * 0.45)
+	var card_width := _detail_body.size.y * CardView.CARD_SIZE.x / CardView.CARD_SIZE.y
+	var room := (
+		_detail_body.size.x
+		- _detail_panel.get_combined_minimum_size().x
+		- _detail_body.get_theme_constant("separation")
+	)
+	_detail_image.custom_minimum_size.x = maxf(0.0, minf(card_width, minf(room, _detail_body.size.x * 0.6)))
 
 
 ## A box in rows: name with the time cost clock, type line, card text, attack / defense, and on
