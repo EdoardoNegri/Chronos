@@ -8,20 +8,6 @@
 [ext_resource type="Script" path="res://scripts/ui/settings_button.gd" id="11_settings"]
 [ext_resource type="Script" path="res://scripts/ui/refresh_button.gd" id="12_refresh"]
 
-[sub_resource type="StyleBoxFlat" id="filters_panel"]
-bg_color = Color(0.07, 0.08, 0.14, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.86, 0.7, 0.36, 0.5)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
-shadow_color = Color(0, 0, 0, 0.45)
-shadow_size = 12
-
 [node name="Play" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -64,22 +50,73 @@ theme_override_constants/separation = 18
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="FiltersButton" type="Button" parent="Content/Layout/Toolbar"]
+[node name="HostField" type="VBoxContainer" parent="Content/Layout/Toolbar"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="HostGap" type="Control" parent="Content/Layout/Toolbar/HostField"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+
+[node name="HostButton" type="Button" parent="Content/Layout/Toolbar/HostField"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Narrow the list: search by name or host, the cards allowed, and locked or unlocked rooms."
-toggle_mode = true
-text = "Filters"
-
-[node name="Spacer" type="Control" parent="Content/Layout/Toolbar"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="HostButton" type="Button" parent="Content/Layout/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
+size_flags_vertical = 3
 theme_type_variation = &"PrimaryButton"
 text = "Host Room"
+
+[node name="SearchField" type="VBoxContainer" parent="Content/Layout/Toolbar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Toolbar/SearchField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Search"
+
+[node name="SearchEdit" type="LineEdit" parent="Content/Layout/Toolbar/SearchField"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+tooltip_text = "Every word must be in the room's name or its host's name. Put text in quotes to match it exactly, spaces included."
+placeholder_text = "Room name or host..."
+clear_button_enabled = true
+
+[node name="CardsField" type="VBoxContainer" parent="Content/Layout/Toolbar"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Toolbar/CardsField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Cards"
+
+[node name="CardsOption" type="OptionButton" parent="Content/Layout/Toolbar/CardsField"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+size_flags_vertical = 3
+tooltip_text = "Standard rooms use the official cards only. Custom cards rooms also allow the cards players created or imported."
+
+[node name="PasswordField" type="VBoxContainer" parent="Content/Layout/Toolbar"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/Toolbar/PasswordField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Password"
+
+[node name="PasswordOption" type="OptionButton" parent="Content/Layout/Toolbar/PasswordField"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+size_flags_vertical = 3
+tooltip_text = "Locked rooms need a password to join."
 
 [node name="ListPanel" type="PanelContainer" parent="Content/Layout"]
 layout_mode = 2
@@ -143,99 +180,6 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
 theme_override_font_sizes/font_size = 16
 horizontal_alignment = 1
-
-[node name="FiltersOverlay" type="Control" parent="."]
-unique_name_in_owner = true
-visible = false
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="FiltersBackdrop" type="ColorRect" parent="FiltersOverlay"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0, 0, 0, 0)
-
-[node name="FiltersDialog" type="PanelContainer" parent="FiltersOverlay"]
-unique_name_in_owner = true
-layout_mode = 0
-theme_override_styles/panel = SubResource("filters_panel")
-
-[node name="Margin" type="MarginContainer" parent="FiltersOverlay/FiltersDialog"]
-layout_mode = 2
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 20
-
-[node name="Form" type="VBoxContainer" parent="FiltersOverlay/FiltersDialog/Margin"]
-layout_mode = 2
-theme_override_constants/separation = 14
-
-[node name="SearchField" type="VBoxContainer" parent="FiltersOverlay/FiltersDialog/Margin/Form"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Label" type="Label" parent="FiltersOverlay/FiltersDialog/Margin/Form/SearchField"]
-layout_mode = 2
-theme_type_variation = &"FieldLabel"
-text = "Search"
-
-[node name="SearchEdit" type="LineEdit" parent="FiltersOverlay/FiltersDialog/Margin/Form/SearchField"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Every word must be in the room's name or its host's name. Put text in quotes to match it exactly, spaces included."
-placeholder_text = "Search rooms by name or host..."
-clear_button_enabled = true
-
-[node name="Row" type="HBoxContainer" parent="FiltersOverlay/FiltersDialog/Margin/Form"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="CardsField" type="VBoxContainer" parent="FiltersOverlay/FiltersDialog/Margin/Form/Row"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 4
-
-[node name="Label" type="Label" parent="FiltersOverlay/FiltersDialog/Margin/Form/Row/CardsField"]
-layout_mode = 2
-theme_type_variation = &"FieldLabel"
-text = "Cards allowed"
-
-[node name="CardsOption" type="OptionButton" parent="FiltersOverlay/FiltersDialog/Margin/Form/Row/CardsField"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Standard rooms use the official cards only. Custom cards rooms also allow the cards players created or imported."
-
-[node name="PasswordField" type="VBoxContainer" parent="FiltersOverlay/FiltersDialog/Margin/Form/Row"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 4
-
-[node name="Label" type="Label" parent="FiltersOverlay/FiltersDialog/Margin/Form/Row/PasswordField"]
-layout_mode = 2
-theme_type_variation = &"FieldLabel"
-text = "Password"
-
-[node name="PasswordOption" type="OptionButton" parent="FiltersOverlay/FiltersDialog/Margin/Form/Row/PasswordField"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Locked rooms need a password to join."
-
-[node name="ClearFiltersButton" type="Button" parent="FiltersOverlay/FiltersDialog/Margin/Form/Row"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_vertical = 8
-tooltip_text = "Empty the filters."
-text = "Clear"
 
 [node name="HostOverlay" type="Control" parent="."]
 unique_name_in_owner = true

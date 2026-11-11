@@ -154,49 +154,40 @@ func test_the_list_follows_github_and_can_be_searched() -> void:
 	assert_true(empty.visible, "rooms that are closed drop off")
 
 
-func test_the_filters_open_in_a_window_that_holds_the_search_field() -> void:
+func test_every_filter_is_in_the_top_row_and_there_is_no_window() -> void:
 	var scene := _make_scene()
-	var window: Control = scene.get_node("%FiltersOverlay")
-	var search: LineEdit = scene.get_node("%SearchEdit")
-	assert_false(window.visible, "the filters start closed")
-	assert_true(window.is_ancestor_of(search), "the search field is one of them")
-	assert_false(search.is_visible_in_tree(), "so it is hidden with them")
-	assert_true(window.is_ancestor_of(scene.get_node("%CardsOption")))
-	assert_true(window.is_ancestor_of(scene.get_node("%PasswordOption")))
-	assert_false(
-		(scene.get_node("%Content") as Control).is_ancestor_of(window),
-		"a window over the screen: it takes no room from the list"
-	)
-
 	await get_tree().process_frame
-	var filters_button: Button = scene.get_node("%FiltersButton")
-	assert_false(filters_button.button_pressed, "the button is not lit while the filters are closed")
-	filters_button.pressed.emit()
-	assert_true(window.visible, "the button opens the window")
-	assert_true(search.is_visible_in_tree())
-	assert_true(filters_button.button_pressed, "and is lit while they are open")
 	await get_tree().process_frame
-
-	var dialog: Control = scene.get_node("%FiltersDialog")
+	assert_null(scene.get_node_or_null("%FiltersButton"), "no Filters button")
+	assert_null(scene.get_node_or_null("%FiltersOverlay"), "and no window to open")
+	var toolbar: Control = scene.get_node("Content/Layout/Toolbar")
 	var host: Control = scene.get_node("%HostButton")
-	assert_gt(dialog.global_position.x, filters_button.global_position.x + filters_button.size.x, "it starts at the right of the Filters button")
-	assert_almost_eq(dialog.global_position.y, filters_button.global_position.y, 0.5, "level with it, not under it")
-	assert_lt(dialog.global_position.x + dialog.size.x, host.global_position.x, "and ends before the Host Room button")
-
-	var click := InputEventMouseButton.new()
-	click.button_index = MOUSE_BUTTON_LEFT
-	click.pressed = true
-	(scene.get_node("%FiltersBackdrop") as Control).gui_input.emit(click)
-	assert_false(window.visible, "a click outside it closes it")
-	assert_false(filters_button.button_pressed, "and the button goes dark again")
-
-	filters_button.pressed.emit()
-	var escape := InputEventAction.new()
-	escape.action = "ui_cancel"
-	escape.pressed = true
-	scene._unhandled_input(escape)
-	assert_false(window.visible, "so does Escape")
-	assert_null(scene.get_node_or_null("%FiltersDoneButton"), "there is no Done button: the list follows the filters as they change")
+	var fields: Array[Control] = [
+		scene.get_node("%SearchEdit"), scene.get_node("%CardsOption"), scene.get_node("%PasswordOption")
+	]
+	var toolbar_rect := toolbar.get_global_rect()
+	for field in fields:
+		assert_true(toolbar.is_ancestor_of(field), "%s is in the top row" % field.name)
+		assert_true(field.is_visible_in_tree(), "%s is in view" % field.name)
+		assert_true(toolbar_rect.encloses(field.get_global_rect()), "%s is not cut off" % field.name)
+		assert_gt(field.global_position.x, host.get_global_rect().end.x, "%s is on the right of Host Room" % field.name)
+	assert_lt(host.global_position.x, toolbar.global_position.x + 20.0, "Host Room is on the left")
+	assert_gt(
+		(fields[2] as Control).get_global_rect().end.x,
+		toolbar_rect.end.x - 20.0,
+		"and the filters are against the right edge"
+	)
+	for field in fields:
+		var caption: Label = field.get_parent().get_child(0)
+		assert_true(caption is Label and caption.text != "", "%s has its title" % field.name)
+		assert_lt(caption.get_global_rect().end.y, field.global_position.y + 1.0, "above it, not at its side")
+		var baseline := caption.global_position.y + caption.get_theme_font("font").get_ascent(caption.get_theme_font_size("font_size"))
+		assert_almost_eq(host.global_position.y, baseline, 1.0, "Host Room starts at the line its title sits on")
+		assert_almost_eq(
+			field.get_global_rect().end.y, host.get_global_rect().end.y, 1.0, "%s ends where Host Room ends" % field.name
+		)
+	assert_gt((fields[0] as Control).size.x, 200.0, "the search field has room to type in")
+	assert_lte(toolbar.get_combined_minimum_size().x, toolbar.size.x, "it all fits in the row")
 
 
 func test_refreshing_is_a_circular_arrow_at_the_top_right_of_the_list() -> void:
@@ -214,19 +205,18 @@ func test_refreshing_is_a_circular_arrow_at_the_top_right_of_the_list() -> void:
 	assert_false((scene.get_node("Content/Layout/Toolbar") as Node).is_ancestor_of(refresh), "no longer in the toolbar")
 
 
-func test_the_filters_narrow_the_list_even_when_closed() -> void:
+func test_the_filters_narrow_the_list_as_they_change() -> void:
 	var scene := _make_scene()
 	await _show_example_rooms(scene)
-	var button: Button = scene.get_node("%FiltersButton")
 	var cards: OptionButton = scene.get_node("%CardsOption")
 	var password: OptionButton = scene.get_node("%PasswordOption")
-	assert_eq(button.text, "Filters", "nothing narrows the list yet")
+	assert_eq(scene._active_filters(), 0, "nothing narrows the list yet")
 
 	cards.select(2)
 	cards.item_selected.emit(2)
 	assert_eq(cards.get_item_text(2), RoomInfo.MODE_CUSTOM)
 	assert_eq(_listed(scene), ["Paradox Lounge"] as Array[String], "only rooms that allow custom cards")
-	assert_eq(button.text, "Filters (1)", "the closed button says a filter is in use")
+	assert_eq(scene._active_filters(), 1)
 
 	cards.select(1)
 	cards.item_selected.emit(1)
@@ -236,7 +226,7 @@ func test_the_filters_narrow_the_list_even_when_closed() -> void:
 	password.item_selected.emit(1)
 	assert_eq(password.get_item_text(1), "Locked")
 	assert_eq(_listed(scene), [] as Array[String], "no standard room is locked")
-	assert_eq(button.text, "Filters (2)")
+	assert_eq(scene._active_filters(), 2)
 	var empty: Label = scene.get_node("%EmptyLabel")
 	assert_true(empty.visible)
 	assert_string_contains(empty.text, "these filters")
@@ -252,28 +242,7 @@ func test_the_filters_narrow_the_list_even_when_closed() -> void:
 	(scene.get_node("%SearchEdit") as LineEdit).text = "nyx"
 	scene._on_search_changed("nyx")
 	assert_eq(_listed(scene), ["Home Game"] as Array[String], "with the search text as well")
-	assert_eq(button.text, "Filters (2)")
-
-
-func test_clear_empties_the_filters() -> void:
-	var scene := _make_scene()
-	await _show_example_rooms(scene)
-	var search: LineEdit = scene.get_node("%SearchEdit")
-	var cards: OptionButton = scene.get_node("%CardsOption")
-	var password: OptionButton = scene.get_node("%PasswordOption")
-	search.text = "lyra"
-	cards.select(2)
-	password.select(1)
-	scene._rebuild_list()
-	assert_eq(_listed(scene), ["Paradox Lounge"] as Array[String])
-	assert_eq((scene.get_node("%FiltersButton") as Button).text, "Filters (3)")
-
-	(scene.get_node("%ClearFiltersButton") as Button).pressed.emit()
-	assert_eq(search.text, "")
-	assert_eq(cards.selected, 0)
-	assert_eq(password.selected, 0)
-	assert_eq(_listed(scene), ["Home Game", "Paradox Lounge", "Temporal Rift"] as Array[String])
-	assert_eq((scene.get_node("%FiltersButton") as Button).text, "Filters")
+	assert_eq(scene._active_filters(), 2)
 
 
 func test_the_list_says_why_it_is_empty() -> void:
