@@ -55,6 +55,39 @@ func test_room_search_reads_words_and_quotes_like_every_search_field() -> void:
 	assert_eq(_dir.get_rooms("emporal").size(), 1, "words match inside longer words")
 
 
+func test_rooms_can_be_limited_to_a_game_mode() -> void:
+	for room in _dir.get_rooms("", false, RoomInfo.MODE_CUSTOM):
+		assert_true(room.custom_cards, "only rooms that allow custom cards")
+	assert_eq(_dir.get_rooms("", false, RoomInfo.MODE_CUSTOM).size(), 3)
+	for room in _dir.get_rooms("", false, RoomInfo.MODE_STANDARD):
+		assert_false(room.custom_cards, "only standard rooms")
+	assert_eq(_dir.get_rooms("", false, RoomInfo.MODE_STANDARD).size(), 5)
+	assert_eq(_dir.get_rooms("", false, "").size(), 8, "no mode means every room")
+
+
+func test_rooms_can_be_limited_to_locked_or_unlocked() -> void:
+	var locked := _dir.get_rooms("", false, "", RoomDirectory.Password.LOCKED)
+	assert_eq(locked.size(), 2)
+	for room in locked:
+		assert_true(room.has_password())
+	var unlocked := _dir.get_rooms("", false, "", RoomDirectory.Password.UNLOCKED)
+	assert_eq(unlocked.size(), 6)
+	for room in unlocked:
+		assert_false(room.has_password())
+	assert_eq(_dir.get_rooms("", false, "", RoomDirectory.Password.ANY).size(), 8)
+
+
+func test_the_filters_work_together_with_the_search_and_with_open_rooms() -> void:
+	var rooms := _dir.get_rooms("lounge", true, RoomInfo.MODE_CUSTOM, RoomDirectory.Password.LOCKED)
+	assert_eq(rooms.size(), 1)
+	assert_eq(rooms[0].room_name, "Paradox Lounge")
+	assert_eq(_dir.get_rooms("lounge", true, RoomInfo.MODE_STANDARD).size(), 0, "the mode must fit too")
+	assert_eq(_dir.get_rooms("lounge", true, "", RoomDirectory.Password.UNLOCKED).size(), 0, "so must the password")
+	# Casual Hourglass allows custom cards and has no password; Midnight Duel is in a game.
+	assert_eq(_dir.get_rooms("", true, RoomInfo.MODE_CUSTOM, RoomDirectory.Password.UNLOCKED).size(), 1)
+	assert_eq(_dir.get_rooms("midnight", true, RoomInfo.MODE_STANDARD).size(), 0, "a room in a game stays out")
+
+
 func test_rooms_are_standard_unless_hosted_with_custom_cards() -> void:
 	var standard := _dir.host_room("Plain game")
 	var custom := _dir.host_room("With my cards", true)

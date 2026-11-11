@@ -6,6 +6,53 @@
 [ext_resource type="Script" path="res://scripts/ui/back_arrow.gd" id="9_back"]
 [ext_resource type="Script" path="res://scripts/ui/settings_button.gd" id="11_settings"]
 [ext_resource type="PackedScene" path="res://scenes/card_search_form.tscn" id="12_form"]
+[ext_resource type="Script" path="res://scripts/ui/card_info.gd" id="13_info"]
+
+[sub_resource type="StyleBoxFlat" id="field_box"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+bg_color = Color(0.05, 0.06, 0.1, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.86, 0.7, 0.36, 0.3)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="preview_frame"]
+content_margin_left = 2.0
+content_margin_top = 2.0
+content_margin_right = 2.0
+content_margin_bottom = 2.0
+bg_color = Color(0.05, 0.06, 0.1, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.86, 0.7, 0.36, 0.2)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="drawer"]
+bg_color = Color(0.07, 0.08, 0.14, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.86, 0.7, 0.36, 0.5)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 12
 
 [node name="Decks" type="Control"]
 layout_mode = 3
@@ -43,13 +90,54 @@ theme_override_constants/margin_bottom = 24
 layout_mode = 2
 theme_override_constants/separation = 12
 
+[node name="Toolbar" type="HBoxContainer" parent="Content/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DeckOption" type="OptionButton" parent="Content/Layout/Toolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+text_overrun_behavior = 3
+fit_to_longest_item = false
+
+[node name="NameEdit" type="LineEdit" parent="Content/Layout/Toolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+placeholder_text = "Deck name"
+max_length = 40
+
+[node name="Spacer" type="Control" parent="Content/Layout/Toolbar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ClearButton" type="Button" parent="Content/Layout/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Take every card out of the deck."
+text = "Clear"
+
+[node name="DeleteButton" type="Button" parent="Content/Layout/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Delete the saved deck that is open."
+text = "Delete"
+
+[node name="SaveButton" type="Button" parent="Content/Layout/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Save"
+
 [node name="Body" type="HBoxContainer" parent="Content/Layout"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 14
 
 [node name="InfoPanel" type="PanelContainer" parent="Content/Layout/Body"]
-custom_minimum_size = Vector2(250, 0)
+custom_minimum_size = Vector2(224, 0)
 layout_mode = 2
 theme_type_variation = &"Card"
 
@@ -64,9 +152,13 @@ theme_override_constants/margin_bottom = 14
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Preview" type="TextureRect" parent="Content/Layout/Body/InfoPanel/InfoMargin/InfoColumn"]
+[node name="PreviewFrame" type="PanelContainer" parent="Content/Layout/Body/InfoPanel/InfoMargin/InfoColumn"]
+custom_minimum_size = Vector2(196, 274)
+layout_mode = 2
+theme_override_styles/panel = SubResource("preview_frame")
+
+[node name="Preview" type="TextureRect" parent="Content/Layout/Body/InfoPanel/InfoMargin/InfoColumn/PreviewFrame"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(222, 310)
 layout_mode = 2
 texture_filter = 5
 expand_mode = 1
@@ -77,18 +169,15 @@ layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="Details" type="RichTextLabel" parent="Content/Layout/Body/InfoPanel/InfoMargin/InfoColumn/DetailsScroll"]
+[node name="Info" type="VBoxContainer" parent="Content/Layout/Body/InfoPanel/InfoMargin/InfoColumn/DetailsScroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-bbcode_enabled = true
-fit_content = true
-scroll_active = false
+script = ExtResource("13_info")
 
 [node name="DeckPanel" type="PanelContainer" parent="Content/Layout/Body"]
+custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
-size_flags_horizontal = 3
-size_flags_stretch_ratio = 1.6
 theme_type_variation = &"Card"
 
 [node name="DeckMargin" type="MarginContainer" parent="Content/Layout/Body/DeckPanel"]
@@ -100,88 +189,96 @@ theme_override_constants/margin_bottom = 14
 
 [node name="DeckColumn" type="VBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin"]
 layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="DeckBar" type="HBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="DeckOption" type="OptionButton" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckBar"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-text_overrun_behavior = 3
-fit_to_longest_item = false
-
-[node name="NameEdit" type="LineEdit" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckBar"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-placeholder_text = "Deck name"
-max_length = 40
+theme_override_constants/separation = 10
 
 [node name="StatsRow" type="HBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
 layout_mode = 2
-theme_override_constants/separation = 18
-
-[node name="CountLabel" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-
-[node name="PointsLabel" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-
-[node name="ValidityLabel" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 16
-text_overrun_behavior = 3
-
-[node name="DeckScroll" type="ScrollContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_vertical = 3
-horizontal_scroll_mode = 0
-
-[node name="DeckGrid" type="HFlowContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckScroll"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/h_separation = 4
-theme_override_constants/v_separation = 4
-
-[node name="DeckFooter" type="HBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
-layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Status" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckFooter"]
+[node name="CountField" type="VBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Caption" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow/CountField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Cards (at least 50)"
+
+[node name="CountBox" type="PanelContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow/CountField"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("field_box")
+
+[node name="CountLabel" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow/CountField/CountBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+
+[node name="PointsField" type="VBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Caption" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow/PointsField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Points"
+
+[node name="PointsBox" type="PanelContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow/PointsField"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("field_box")
+
+[node name="PointsLabel" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/StatsRow/PointsField/PointsBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+
+[node name="ValidityLabel" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+autowrap_mode = 3
+
+[node name="DeckStack" type="MarginContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="DeckScroll" type="ScrollContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckStack"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="DeckPadding" type="MarginContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckStack/DeckScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_right = 8
+
+[node name="DeckList" type="VBoxContainer" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckStack/DeckScroll/DeckPadding"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="EmptyDeckLabel" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckStack"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
+theme_override_font_sizes/font_size = 18
+text = "The deck is empty.
+Double-click a card in the list, or drag it here."
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="Status" type="Label" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
-size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.62, 0.64, 0.74, 1)
 theme_override_font_sizes/font_size = 16
 text_overrun_behavior = 3
-
-[node name="ClearButton" type="Button" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckFooter"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Clear"
-
-[node name="DeleteButton" type="Button" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckFooter"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Delete"
-
-[node name="SaveButton" type="Button" parent="Content/Layout/Body/DeckPanel/DeckMargin/DeckColumn/DeckFooter"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"PrimaryButton"
-text = "Save"
 
 [node name="SearchPanel" type="PanelContainer" parent="Content/Layout/Body"]
 unique_name_in_owner = true
@@ -204,44 +301,19 @@ theme_override_constants/separation = 8
 layout_mode = 2
 theme_override_constants/separation = 8
 
+[node name="FiltersButton" type="Button" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/SearchRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "The database's search: by name, type, subtype, card text and numbers. The box next to it searches the name, subtype and text."
+toggle_mode = true
+text = "Filters"
+
 [node name="SearchEdit" type="LineEdit" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/SearchRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-placeholder_text = "Search..."
+placeholder_text = "Search cards..."
 clear_button_enabled = true
-
-[node name="FiltersButton" type="Button" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/SearchRow"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Search by name, type, subtype, card text and numbers, like in the database."
-toggle_mode = true
-text = "Filters"
-
-[node name="FiltersScroll" type="ScrollContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-size_flags_vertical = 0
-horizontal_scroll_mode = 0
-
-[node name="FiltersPadding" type="MarginContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/FiltersScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/margin_right = 12
-
-[node name="FiltersColumn" type="VBoxContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/FiltersScroll/FiltersPadding"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="SearchForm" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/FiltersScroll/FiltersPadding/FiltersColumn" instance=ExtResource("12_form")]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="ClearFiltersButton" type="Button" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/FiltersScroll/FiltersPadding/FiltersColumn"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Clear filters"
 
 [node name="ResultCount" type="Label" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn"]
 unique_name_in_owner = true
@@ -254,12 +326,17 @@ layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="ResultGrid" type="HFlowContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/ResultScroll"]
+[node name="ResultPadding" type="MarginContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/ResultScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_right = 10
+
+[node name="ResultGrid" type="HFlowContainer" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn/ResultScroll/ResultPadding"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/h_separation = 4
-theme_override_constants/v_separation = 4
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
 
 [node name="EmptyLabel" type="Label" parent="Content/Layout/Body/SearchPanel/SearchMargin/SearchColumn"]
 unique_name_in_owner = true
@@ -271,6 +348,65 @@ theme_override_font_sizes/font_size = 18
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 3
+
+[node name="FiltersOverlay" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="FiltersDrawer" type="PanelContainer" parent="FiltersOverlay"]
+unique_name_in_owner = true
+layout_mode = 0
+theme_override_styles/panel = SubResource("drawer")
+
+[node name="DrawerMargin" type="MarginContainer" parent="FiltersOverlay/FiltersDrawer"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 16
+
+[node name="DrawerColumn" type="VBoxContainer" parent="FiltersOverlay/FiltersDrawer/DrawerMargin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DrawerHeader" type="HBoxContainer" parent="FiltersOverlay/FiltersDrawer/DrawerMargin/DrawerColumn"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DrawerTitle" type="Label" parent="FiltersOverlay/FiltersDrawer/DrawerMargin/DrawerColumn/DrawerHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
+theme_override_font_sizes/font_size = 28
+text = "Filters"
+
+[node name="ClearFiltersButton" type="Button" parent="FiltersOverlay/FiltersDrawer/DrawerMargin/DrawerColumn/DrawerHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Empty the filters."
+text = "Clear"
+
+[node name="FormScroll" type="ScrollContainer" parent="FiltersOverlay/FiltersDrawer/DrawerMargin/DrawerColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="FormPadding" type="MarginContainer" parent="FiltersOverlay/FiltersDrawer/DrawerMargin/DrawerColumn/FormScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_right = 12
+
+[node name="SearchForm" parent="FiltersOverlay/FiltersDrawer/DrawerMargin/DrawerColumn/FormScroll/FormPadding" instance=ExtResource("12_form")]
+unique_name_in_owner = true
+layout_mode = 2
 
 [node name="BackButton" type="Button" parent="."]
 unique_name_in_owner = true

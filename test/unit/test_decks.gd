@@ -240,21 +240,101 @@ func _make_scene_with_cards(count: int) -> Control:
 	return scene
 
 
+## The text of every label under a node, one after the other.
+func _texts(root: Node) -> String:
+	var texts: Array[String] = []
+	for label: Label in root.find_children("*", "Label", true, false):
+		texts.append(label.text)
+	return " | ".join(texts)
+
+
 func test_deck_builder_lists_cards_and_adds_and_removes() -> void:
 	var scene := _make_scene_with_cards(3)
 	var results: Container = scene.get_node("%ResultGrid")
-	var deck_grid: Container = scene.get_node("%DeckGrid")
+	var deck_list: Container = scene.get_node("%DeckList")
 	assert_eq(results.get_child_count(), 3)
+	assert_eq(deck_list.get_child_count(), 0)
 	var card_id: String = scene._cards[0].id
 	scene._add_card(card_id)
 	scene._add_card(card_id)
-	assert_eq(deck_grid.get_child_count(), 2)
+	assert_eq(deck_list.get_child_count(), 1, "one row for a card, however many copies")
 	assert_eq(scene._deck.copies(card_id), 2)
+	assert_string_contains(_texts(deck_list), "×2", "the row says how many copies")
 	scene._add_card(card_id)
 	scene._add_card(card_id)
-	assert_eq(deck_grid.get_child_count(), 3, "capped at three copies")
+	assert_eq(scene._deck.copies(card_id), 3, "capped at three copies")
+	assert_string_contains(_texts(deck_list), "×3")
+	assert_true(_row_button(deck_list, 0, 1).disabled, "+ is off at three copies")
 	scene._remove_card(card_id)
-	assert_eq(deck_grid.get_child_count(), 2)
+	assert_eq(scene._deck.copies(card_id), 2)
+	assert_string_contains(_texts(deck_list), "×2")
+	scene._remove_card(card_id)
+	scene._remove_card(card_id)
+	assert_eq(deck_list.get_child_count(), 0, "the row goes with the last copy")
+
+
+func test_deck_rows_follow_the_decks_order_and_their_buttons_add_and_remove() -> void:
+	var scene := _make_scene_with_cards(3)
+	var deck_list: Container = scene.get_node("%DeckList")
+	# The cards cost 0, 1 and 2, so the cheapest comes first.
+	for card: CardData in scene._cards:
+		scene._add_card(card.id)
+	var names: Array[String] = []
+	for row: DeckRow in deck_list.get_children():
+		names.append(scene._cards_by_id[row.card_id].card_name)
+	assert_eq(names, ["Card 0", "Card 1", "Card 2"] as Array[String])
+
+	var middle_id: String = (deck_list.get_child(1) as DeckRow).card_id
+	# The rows are made again after every change, so the buttons are looked up each time.
+	_row_button(deck_list, 1, 1).pressed.emit()
+	assert_eq(scene._deck.copies(middle_id), 2, "+ adds a copy")
+	_row_button(deck_list, 1, 0).pressed.emit()
+	_row_button(deck_list, 1, 0).pressed.emit()
+	assert_eq(scene._deck.copies(middle_id), 0, "− takes one out")
+	assert_eq(deck_list.get_child_count(), 2)
+
+	var first_id: String = (deck_list.get_child(0) as DeckRow).card_id
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_RIGHT
+	click.pressed = true
+	(deck_list.get_child(0) as DeckRow)._gui_input(click)
+	assert_eq(scene._deck.copies(first_id), 0, "a right click takes a copy out too")
+
+
+## The − (0) or + (1) button of a row of the deck.
+func _row_button(deck_list: Node, row_index: int, which: int) -> Button:
+	return deck_list.get_child(row_index).find_children("*", "Button", true, false)[which]
+
+
+func test_the_deck_counts_cards_and_points_and_says_what_is_missing() -> void:
+	var scene := _make_scene_with_cards(2)
+	var hint: Label = scene.get_node("%EmptyDeckLabel")
+	assert_true(hint.visible, "an empty deck says how to fill it")
+	assert_eq((scene.get_node("%CountLabel") as Label).text, "0")
+	scene._add_card(scene._cards[0].id)
+	assert_false(hint.visible)
+	assert_eq((scene.get_node("%CountLabel") as Label).text, "1")
+	assert_eq((scene.get_node("%PointsLabel") as Label).text, "0 / 100")
+	assert_string_contains((scene.get_node("%ValidityLabel") as Label).text, "Needs 49 more cards")
+
+
+func test_selecting_a_card_shows_its_picture_and_details() -> void:
+	var scene := _make_scene_with_cards(2)
+	var info: Control = scene.get_node("%Info")
+	assert_string_contains(_texts(info), CardInfo.NOTHING_TEXT, "nothing is selected at first")
+	assert_null((scene.get_node("%Preview") as TextureRect).texture)
+
+	var card: CardData = scene._cards[1]
+	scene._select(card.id)
+	var details := _texts(info)
+	assert_string_contains(details, card.card_name)
+	for caption in ["Time cost", "Points", "In deck", "Attack", "Defense"]:
+		assert_string_contains(details, caption, "a creature shows its %s" % caption)
+	assert_string_contains(details, "0 / 3", "none of it is in the deck yet")
+	assert_not_null((scene.get_node("%Preview") as TextureRect).texture)
+
+	scene._add_card(card.id)
+	assert_string_contains(_texts(info), "1 / 3", "the details follow the deck")
 
 
 func test_deck_builder_offers_official_and_custom_cards() -> void:
@@ -318,7 +398,7 @@ func test_deck_builder_filters_are_the_database_search_form() -> void:
 	var scene := _make_scene_with_cards(3)
 	var results: Container = scene.get_node("%ResultGrid")
 	var button: Button = scene.get_node("%FiltersButton")
-	var panel: Control = scene.get_node("%FiltersScroll")
+	var panel: Control = scene.get_node("%FiltersOverlay")
 	var form: CardSearchForm = scene.get_node("%SearchForm")
 	assert_false(panel.visible, "the filters start closed")
 	assert_null(scene.get_node_or_null("%TypeFilter"), "the form replaces the old type dropdown")
@@ -326,7 +406,7 @@ func test_deck_builder_filters_are_the_database_search_form() -> void:
 
 	button.button_pressed = true
 	assert_true(panel.visible)
-	assert_gt((scene.get_node("%SearchPanel") as Control).size_flags_stretch_ratio, 1.0, "the list gets more room")
+	assert_true(results.is_visible_in_tree(), "the cards stay in view while the filters are open")
 
 	_type_filter(form, "%TypeEdit", "spell")
 	assert_eq(results.get_child_count(), 0, "no spells in this library")
@@ -359,7 +439,58 @@ func test_deck_builder_filters_are_the_database_search_form() -> void:
 
 	button.button_pressed = false
 	assert_false(panel.visible)
-	assert_eq((scene.get_node("%SearchPanel") as Control).size_flags_stretch_ratio, 1.0)
+
+
+func test_the_filters_panel_covers_the_left_side_and_stops_before_the_cards() -> void:
+	var scene := _make_scene_with_cards(3)
+	await get_tree().process_frame
+	var button: Button = scene.get_node("%FiltersButton")
+	var drawer: Control = scene.get_node("%FiltersDrawer")
+	var body: Control = scene.get_node("%Body")
+	var cards: Control = scene.get_node("%SearchPanel")
+	button.button_pressed = true
+	await get_tree().process_frame
+	assert_almost_eq(drawer.global_position.x, body.global_position.x, 0.5, "it starts at the left edge")
+	assert_lt(drawer.global_position.x + drawer.size.x, cards.global_position.x, "and stops before the cards")
+	assert_lte(drawer.global_position.y, body.global_position.y, "from the top of the columns or higher")
+	assert_gte(
+		drawer.global_position.y + drawer.size.y, body.global_position.y + body.size.y - 0.5, "to the bottom of them"
+	)
+	assert_eq(
+		(scene.get_node("%FiltersOverlay") as Control).mouse_filter,
+		Control.MOUSE_FILTER_IGNORE,
+		"clicks outside the panel reach the cards"
+	)
+
+	var escape := InputEventAction.new()
+	escape.action = "ui_cancel"
+	escape.pressed = true
+	scene._unhandled_input(escape)
+	assert_false((scene.get_node("%FiltersOverlay") as Control).visible, "Escape closes it")
+	assert_false(button.button_pressed, "and the button is not lit any more")
+
+
+func test_the_card_pictures_fill_each_row_of_the_list() -> void:
+	var scene := _make_scene_with_cards(6)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var grid: Control = scene.get_node("%ResultGrid")
+	var thumbs := grid.get_children()
+	assert_eq(thumbs.size(), 6)
+	var first: Control = thumbs[0]
+	assert_gte(first.custom_minimum_size.x, scene.RESULT_MIN_WIDTH, "no smaller than the smallest size")
+	assert_almost_eq(
+		first.custom_minimum_size.y / first.custom_minimum_size.x,
+		CardThumb.THUMB_SIZE.y / CardThumb.THUMB_SIZE.x,
+		0.02,
+		"with the card's proportions"
+	)
+	# Each row is full: the pictures of the first row end where the list does.
+	var right_edge := 0.0
+	for thumb: Control in thumbs:
+		if is_equal_approx(thumb.global_position.y, first.global_position.y):
+			right_edge = maxf(right_edge, thumb.global_position.x + thumb.size.x)
+	assert_almost_eq(right_edge, grid.global_position.x + grid.size.x, 1.5)
 
 
 func test_deck_builder_search_reads_words_and_quotes_like_every_search_field() -> void:

@@ -3,12 +3,15 @@ extends Control
 ## players.
 ##
 ## Hosting runs the room on the host's own computer and puts it in the room list (see Lobby and
-## RoomBoard). The list is read when the screen opens, on Refresh, and every so often while it is
-## open. Joining connects straight to the host's game, at the address the list gives; a room whose
-## host cannot be reached is taken off the list. The first time the player comes here they are
-## asked for a name (see PlayerProfile), which is all the account there is. A room can have a
-## password, which the host sets and a player joining has to type. Once a room is opened or joined,
-## the room screen takes over.
+## RoomBoard). The list is read when the screen opens, on Refresh (the circular arrow at the top
+## right of the list), and every so often while it is open. The Filters button, lit while it is
+## open, opens a window at its right with the search field, the cards allowed and the password;
+## the list follows them as they change, they keep narrowing it after the window is closed, and
+## the button says how many are in use. Joining connects straight to the host's game, at the
+## address the list gives; a room whose host cannot be reached is taken off the list. The first
+## time the player comes here they are asked for a name (see PlayerProfile), which is all the
+## account there is. A room can have a password, which the host sets and a player joining has to
+## type. Once a room is opened or joined, the room screen takes over.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const ROOM_SCENE := "res://scenes/room.tscn"
@@ -17,6 +20,10 @@ const ERROR_COLOR := Color(0.9, 0.5, 0.45)
 const SUCCESS_COLOR := Color(0.5, 0.82, 0.55)
 ## How often the list is read again while the screen is open.
 const REFRESH_SECONDS := 30.0
+## The first choice of each filter: no limit. The cards filter goes on with the game modes, the
+## password filter with these (in the order of RoomDirectory.Password).
+const ANY_FILTER := "Any"
+const PASSWORD_FILTERS: Array[String] = [ANY_FILTER, "Locked", "Unlocked"]
 
 @export var room_row_scene: PackedScene
 
@@ -39,7 +46,14 @@ var _target_started := false
 var _refresh_timer: Timer
 
 @onready var _content: Control = %Content
+@onready var _filters_button: Button = %FiltersButton
+@onready var _filters_overlay: Control = %FiltersOverlay
+@onready var _filters_backdrop: Control = %FiltersBackdrop
+@onready var _filters_dialog: Control = %FiltersDialog
 @onready var _search_edit: LineEdit = %SearchEdit
+@onready var _cards_option: OptionButton = %CardsOption
+@onready var _password_option: OptionButton = %PasswordOption
+@onready var _clear_filters_button: Button = %ClearFiltersButton
 @onready var _refresh_button: Button = %RefreshButton
 @onready var _host_button: Button = %HostButton
 @onready var _back_button: Button = %BackButton
@@ -69,9 +83,25 @@ var _refresh_timer: Timer
 func _ready() -> void:
 	for mode in RoomInfo.MODES:
 		_game_mode_option.add_item(mode)
+	_cards_option.add_item(ANY_FILTER)
+	for mode in RoomInfo.MODES:
+		_cards_option.add_item(mode)
+	for choice in PASSWORD_FILTERS:
+		_password_option.add_item(choice)
 	_back_button.pressed.connect(_go_back)
+	_filters_button.pressed.connect(_open_filters)
+	# The button stays lit for as long as the filters are open.
+	_filters_overlay.visibility_changed.connect(
+		func() -> void: _filters_button.set_pressed_no_signal(_filters_overlay.visible)
+	)
+	_filters_backdrop.gui_input.connect(_on_filters_backdrop_input)
+	# After the toolbar has been laid out again for the new size.
+	_filters_overlay.resized.connect(_place_filters, CONNECT_DEFERRED)
 	_search_edit.text_changed.connect(_on_search_changed)
 	_search_edit.gui_input.connect(SearchText.pair_quotes.bind(_search_edit))
+	_cards_option.item_selected.connect(_on_filter_selected)
+	_password_option.item_selected.connect(_on_filter_selected)
+	_clear_filters_button.pressed.connect(_clear_filters)
 	_refresh_button.pressed.connect(_refresh)
 	_host_button.pressed.connect(_open_host_dialog)
 	_create_button.pressed.connect(_create_room)
@@ -102,7 +132,6 @@ func _ready() -> void:
 	add_child(_refresh_timer)
 	_rebuild_list()
 	if profile.has_account():
-		_search_edit.grab_focus()
 		_go_online()
 	else:
 		_open_overlay(_account_overlay, _account_name_edit)
@@ -114,7 +143,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed("ui_cancel"):
 		return
 	get_viewport().set_input_as_handled()
-	if _host_overlay.visible:
+	if _filters_overlay.visible:
+		_close_overlay(_filters_overlay)
+	elif _host_overlay.visible:
 		_close_overlay(_host_overlay)
 	elif _join_overlay.visible:
 		_cancel_join()
@@ -128,6 +159,74 @@ func _go_back() -> void:
 
 func _on_search_changed(_text: String) -> void:
 	_rebuild_list()
+
+
+# --- Filters -------------------------------------------------------------------------------
+
+
+## Opens the filters in a window over the list, so the list keeps its size. They narrow the list as
+## they are changed, and keep doing so after the window is closed (with a click outside it, or
+## Escape).
+func _open_filters() -> void:
+	_place_filters()
+	_open_overlay(_filters_overlay, _search_edit)
+
+
+## The window starts at the right of the Filters button, level with it, and reaches across to just
+## before the Host Room button.
+func _place_filters() -> void:
+	var gap := float((_filters_button.get_parent() as BoxContainer).get_theme_constant("separation"))
+	var left := _filters_button.global_position.x + _filters_button.size.x + gap
+	var width := maxf(0.0, _host_button.global_position.x - gap - left)
+	_filters_dialog.global_position = Vector2(left, _filters_button.global_position.y)
+	_filters_dialog.size = Vector2(width, 0.0)
+
+
+## A click anywhere outside the window closes it.
+func _on_filters_backdrop_input(event: InputEvent) -> void:
+	var click := event as InputEventMouseButton
+	if click != null and click.pressed:
+		_close_overlay(_filters_overlay)
+
+
+func _on_filter_selected(_index: int) -> void:
+	_rebuild_list()
+
+
+func _clear_filters() -> void:
+	_search_edit.text = ""
+	_cards_option.select(0)
+	_password_option.select(0)
+	_rebuild_list()
+	_search_edit.grab_focus()
+
+
+## The game mode the list is limited to (one of RoomInfo.MODES), or empty for any.
+func _wanted_mode() -> String:
+	return "" if _cards_option.selected <= 0 else RoomInfo.MODES[_cards_option.selected - 1]
+
+
+func _wanted_password() -> RoomDirectory.Password:
+	return _password_option.selected as RoomDirectory.Password
+
+
+## How many filters narrow the list now: the search text, the cards allowed, the password.
+func _active_filters() -> int:
+	var count := 0
+	if not _search_edit.text.strip_edges().is_empty():
+		count += 1
+	if _cards_option.selected > 0:
+		count += 1
+	if _password_option.selected > 0:
+		count += 1
+	return count
+
+
+## The filters button says how many filters are in use, so a list narrowed by filters that are out
+## of sight is not a surprise.
+func _update_filters_button() -> void:
+	var active := _active_filters()
+	_filters_button.text = "Filters" if active == 0 else "Filters (%d)" % active
 
 
 # --- The room list -------------------------------------------------------------------------
@@ -156,8 +255,9 @@ func _rebuild_list() -> void:
 		return
 	for row in _room_list.get_children():
 		row.queue_free()
+	_update_filters_button()
 	var query := _search_edit.text.strip_edges()
-	var rooms := online.board.rooms.get_rooms(_search_edit.text, true)
+	var rooms := online.board.rooms.get_rooms(_search_edit.text, true, _wanted_mode(), _wanted_password())
 	for room in rooms:
 		var row: Node = room_row_scene.instantiate()
 		_room_list.add_child(row)
@@ -170,18 +270,20 @@ func _rebuild_list() -> void:
 		_empty_label.text = _empty_text(query)
 
 
-## What the list says when there is nothing in it: why there is no list, or that it is being read,
-## or that it has no rooms.
+## What the list says when there is nothing in it: that there are no rooms (also when the game has
+## no GitHub token to read the list with), that it is being read, or why it could not be read.
 func _empty_text(query: String) -> String:
 	var board := online.board
 	if not board.is_set_up():
-		return "The room list is not set up in this copy of the game.\n(It has no GitHub token.)"
+		return "No rooms found"
 	if board.refreshing and board.rooms.get_room_count() == 0:
 		return "Looking for rooms…"
 	if not board.error_text.is_empty():
 		return "%s\nPress Refresh to try again." % board.error_text
-	if not query.is_empty():
+	if _active_filters() == 1 and not query.is_empty():
 		return "No open rooms match “%s”." % query
+	if _active_filters() > 0:
+		return "No open rooms match these filters."
 	return "No open rooms right now. Host one!"
 
 
@@ -367,7 +469,6 @@ func _open_overlay(overlay: Control, field: LineEdit) -> void:
 func _close_overlay(overlay: Control) -> void:
 	overlay.visible = false
 	_content.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_INHERITED
-	_search_edit.grab_focus()
 
 
 ## Says something under the room list. The line only takes space while it says something, so the

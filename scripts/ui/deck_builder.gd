@@ -1,10 +1,13 @@
 extends Control
-## Deck builder, laid out like EDOPro's: the selected card on the left, the deck in the middle
-## and the searchable card list on the right. The list has a search box and a Filters button, which
-## opens the same search form as the database (see CardSearchForm); both apply together.
+## Deck builder. A toolbar across the top has the deck picker, the deck's name and Clear, Delete and
+## Save. Under it, from the left: the selected card (its picture and details), the deck as a list
+## (a row per card with its copies and − / + buttons), and the cards you can add, as pictures with a
+## search box and a Filters button. Filters opens the same search form as the database (see
+## CardSearchForm) in a panel over the left side, so the cards stay in view while you filter; the
+## box and the form apply together.
 ##
-## Double-click or right-click a card in the list to add it, and the same on a deck card to
-## remove it. Cards can also be dragged between the two.
+## Double-click or right-click a card in the list to add it, and the same on a row of the deck to
+## take a copy out. Cards can also be dragged between the two.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const NEW_DECK_TEXT := "New deck"
@@ -13,10 +16,8 @@ const IMPORT_DECK_TEXT := "Import deck..."
 const NEW_DECK_INDEX := 0
 const IMPORT_DECK_INDEX := 1
 const FIRST_SAVED_DECK_INDEX := 2
-## How much wider than usual the card list is while the filters are open (the deck is 1.6).
-const FILTERS_OPEN_RATIO := 1.8
-## The most of the card list's column the filters may take.
-const FILTERS_MAX_SHARE := 0.55
+## The smallest card picture in the list of cards; the pictures grow so each row fills the width.
+const RESULT_MIN_WIDTH := 76.0
 const SOURCE_DECK := &"deck"
 const SOURCE_RESULTS := &"results"
 const STATUS_COLOR := Color(0.62, 0.64, 0.74)
@@ -47,23 +48,26 @@ var _deck_dialog: FileDialog
 var _open_option := NEW_DECK_INDEX
 
 @onready var _back_button: Button = %BackButton
-@onready var _preview: TextureRect = %Preview
-@onready var _details: RichTextLabel = %Details
 @onready var _deck_option: OptionButton = %DeckOption
 @onready var _name_edit: LineEdit = %NameEdit
 @onready var _save_button: Button = %SaveButton
 @onready var _delete_button: Button = %DeleteButton
 @onready var _clear_button: Button = %ClearButton
+@onready var _body: Control = %Body
+@onready var _preview: TextureRect = %Preview
+@onready var _info: CardInfo = %Info
 @onready var _count_label: Label = %CountLabel
 @onready var _points_label: Label = %PointsLabel
 @onready var _validity_label: Label = %ValidityLabel
 @onready var _deck_scroll: ScrollContainer = %DeckScroll
-@onready var _deck_grid: HFlowContainer = %DeckGrid
+@onready var _deck_list: VBoxContainer = %DeckList
+@onready var _empty_deck_label: Label = %EmptyDeckLabel
 @onready var _status: Label = %Status
 @onready var _search_edit: LineEdit = %SearchEdit
 @onready var _search_panel: Control = %SearchPanel
 @onready var _filters_button: Button = %FiltersButton
-@onready var _filters_scroll: ScrollContainer = %FiltersScroll
+@onready var _filters_overlay: Control = %FiltersOverlay
+@onready var _filters_drawer: Control = %FiltersDrawer
 @onready var _filters_form: CardSearchForm = %SearchForm
 @onready var _clear_filters_button: Button = %ClearFiltersButton
 @onready var _result_count: Label = %ResultCount
@@ -77,10 +81,12 @@ func _ready() -> void:
 	_search_edit.text_changed.connect(func(_text: String) -> void: _refresh_results())
 	_search_edit.gui_input.connect(SearchText.pair_quotes.bind(_search_edit))
 	_filters_button.toggled.connect(_set_filters_open)
+	# After the panels have been laid out again for the new size.
+	_filters_overlay.resized.connect(_place_filters, CONNECT_DEFERRED)
 	_filters_form.changed.connect(_on_filters_changed)
 	_clear_filters_button.pressed.connect(_filters_form.clear)
-	# The card list is narrow, and the deck can use every card, so the choice starts on Both.
-	_filters_form.compact = true
+	_result_grid.resized.connect(_fit_results)
+	# The deck can use every card, so the choice starts on Both.
 	_filters_form.set_source(CardSearchForm.SOURCE_BOTH)
 	_deck_option.item_selected.connect(_on_deck_option_selected)
 	_name_edit.text_changed.connect(func(text: String) -> void: _deck.deck_name = text)
@@ -104,7 +110,7 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		if _filters_scroll.visible:
+		if _filters_overlay.visible:
 			_filters_button.button_pressed = false
 		else:
 			_go_back()
@@ -144,13 +150,32 @@ func _load_library() -> void:
 			_textures[card.id] = ImageTexture.create_from_image(face)
 
 
-func _make_thumb(card_id: String, source: StringName) -> CardThumb:
+func _make_thumb(card_id: String) -> CardThumb:
 	var card: CardData = _cards_by_id.get(card_id)
 	var thumb := CardThumb.new()
-	thumb.source = source
+	thumb.source = SOURCE_RESULTS
 	thumb.setup(card_id, card.card_name if card != null else "Missing card", _textures.get(card_id))
 	thumb.selected.connect(_select)
 	return thumb
+
+
+func _make_row(card_id: String) -> DeckRow:
+	var card: CardData = _cards_by_id.get(card_id)
+	var copies := _deck.copies(card_id)
+	var row := DeckRow.new()
+	row.source = SOURCE_DECK
+	row.setup(
+		card_id,
+		card.card_name if card != null else "Missing card",
+		str(card.time_cost) if card != null else "?",
+		CardView.TYPE_ACCENTS.get(card.card_type, CardView.DEFAULT_ACCENT) if card != null else CardView.DEFAULT_ACCENT,
+		copies,
+		copies >= DeckData.MAX_COPIES
+	)
+	row.selected.connect(_select)
+	row.added.connect(_add_card)
+	row.removed.connect(_remove_card)
+	return row
 
 
 func _clear_children(container: Container) -> void:
@@ -162,25 +187,27 @@ func _clear_children(container: Container) -> void:
 # --- Card list (right) ---------------------------------------------------------------------
 
 
-## Opens or closes the filters (the same form as in the database). The list of cards gets more room
-## while they are open, so the form's fields are not squeezed.
+## Opens or closes the filters (the same form as in the database). They are a panel over the left
+## side, from the top of the screen down to the bottom of the columns and reaching across to the
+## list of cards, so the list stays in view and follows the form as it is filled in.
 func _set_filters_open(open: bool) -> void:
-	_filters_scroll.visible = open
-	_search_panel.size_flags_stretch_ratio = FILTERS_OPEN_RATIO if open else 1.0
 	if open:
-		_fit_filters()
+		_place_filters()
+		_filters_overlay.modulate.a = 0.0
+		create_tween().tween_property(_filters_overlay, "modulate:a", 1.0, 0.12)
+	_filters_overlay.visible = open
+	if open:
 		_filters_form.focus_name()
 	else:
 		_filters_form.close_suggestions()
 
 
-## The filters are as tall as the form needs, but leave the list of cards at least half the column
-## (the form scrolls when it does not fit).
-func _fit_filters() -> void:
-	var column := _filters_scroll.get_parent_control().get_parent_control()
-	_filters_scroll.custom_minimum_size.y = minf(
-		_filters_form.get_combined_minimum_size().y + 4.0, column.size.y * FILTERS_MAX_SHARE
-	)
+func _place_filters() -> void:
+	var gap := float(_body.get_theme_constant("separation"))
+	var top := _body.get_parent_control().global_position.y
+	var width := maxf(0.0, _search_panel.global_position.x - gap - _body.global_position.x)
+	_filters_drawer.global_position = Vector2(_body.global_position.x, top)
+	_filters_drawer.size = Vector2(width, _body.global_position.y + _body.size.y - top)
 
 
 ## Shows how many filters are in use on the button, and lists the cards again.
@@ -198,7 +225,7 @@ func _refresh_results() -> void:
 	for card in _filters_form.search(_cards, points_list):
 		if not words.is_empty() and not _matches(card, words):
 			continue
-		var thumb := _make_thumb(card.id, SOURCE_RESULTS)
+		var thumb := _make_thumb(card.id)
 		thumb.activated.connect(_add_card)
 		thumb.context_clicked.connect(_add_card)
 		_result_grid.add_child(thumb)
@@ -210,8 +237,23 @@ func _refresh_results() -> void:
 	_empty_label.visible = not has_results
 	_empty_label.text = NO_CARDS_TEXT if not has_library else "No cards match your search."
 	_result_count.text = "%d of %d cards" % [_result_thumbs.size(), _cards.size()]
+	_fit_results()
 	_update_badges()
 	_apply_highlight()
+
+
+## Sizes the pictures so each row of the list is full: as many as fit at their smallest width, then
+## stretched to fill, keeping the card's proportions.
+func _fit_results() -> void:
+	var width := _result_grid.size.x
+	if width <= 0.0:
+		return
+	var gap := _result_grid.get_theme_constant("h_separation")
+	var columns := maxi(1, floori((width + gap) / (RESULT_MIN_WIDTH + gap)))
+	var item_width := floorf((width - gap * (columns - 1)) / columns)
+	var item_size := Vector2(item_width, roundf(item_width * CardThumb.THUMB_SIZE.y / CardThumb.THUMB_SIZE.x))
+	for thumb: CardThumb in _result_grid.get_children():
+		thumb.custom_minimum_size = item_size
 
 
 ## Whether the card's name, subtype and text together hold every word searched for (see SearchText).
@@ -228,18 +270,19 @@ func _update_badges() -> void:
 
 
 func _refresh_deck() -> void:
-	_clear_children(_deck_grid)
+	_clear_children(_deck_list)
+	var listed: Dictionary[String, bool] = {}
 	for card_id in _deck.sorted_ids(_cards_by_id):
-		var thumb := _make_thumb(card_id, SOURCE_DECK)
-		thumb.activated.connect(_remove_card)
-		thumb.context_clicked.connect(_remove_card)
-		_deck_grid.add_child(thumb)
+		if not listed.has(card_id):
+			listed[card_id] = true
+			_deck_list.add_child(_make_row(card_id))
+	_empty_deck_label.visible = _deck.size() == 0
 
 	var problems := _deck.problems(_cards_by_id, points_list)
 	var used := _deck.used_points(_cards_by_id, points_list)
 	var usable := _deck.usable_points()
-	_count_label.text = "Cards: %d" % _deck.size()
-	_points_label.text = "Points: %d / %d" % [used, usable]
+	_count_label.text = str(_deck.size())
+	_points_label.text = "%d / %d" % [used, usable]
 	_count_label.add_theme_color_override(
 		"font_color", INK_COLOR if _deck.size() >= DeckData.MIN_SIZE else ERROR_COLOR
 	)
@@ -397,32 +440,24 @@ func _select(card_id: String) -> void:
 	_apply_highlight()
 
 
+## Marks the selected card in the list of cards (an outline) and in the deck (a lighter row). The
+## cards in the deck get no outline.
 func _apply_highlight() -> void:
-	for grid: Container in [_deck_grid, _result_grid]:
-		for thumb: CardThumb in grid.get_children():
-			thumb.highlighted = thumb.card_id == _selected_id
+	for thumb: CardThumb in _result_grid.get_children():
+		thumb.highlighted = thumb.card_id == _selected_id
+	for row: DeckRow in _deck_list.get_children():
+		row.highlighted = row.card_id == _selected_id
 
 
 func _show_details(card_id: String) -> void:
 	var card: CardData = _cards_by_id.get(card_id)
 	_preview.texture = _textures.get(card_id)
 	if card == null:
-		_details.text = "[color=#9ea3bd]Select a card to see it here.[/color]"
+		_info.show_nothing()
 		return
-	var text := "[font_size=22][color=#f2cc73]%s[/color][/font_size]\n" % _escape(card.card_name)
-	text += "[color=#9ea3bd]%s[/color]\n" % _escape(card.type_line())
-	var cost := points_list.points_for(card)
-	var points := str(cost) if points_list.has_card(card) else "%d (not on the points list)" % cost
-	text += "Time cost %d   ·   Points %s\n" % [card.time_cost, points]
-	if card.has_stats():
-		text += "Attack %d   ·   Defense %d\n" % [card.attack, card.defense]
-	text += "In deck: %d / %d\n\n" % [_deck.copies(card_id), DeckData.MAX_COPIES]
-	text += _escape(card.rules_text)
-	_details.text = text
-
-
-func _escape(text: String) -> String:
-	return text.replace("[", "[lb]")
+	_info.show_card(
+		card, points_list.points_for(card), points_list.has_card(card), _deck.copies(card_id), DeckData.MAX_COPIES
+	)
 
 
 func _show_status(text: String, color: Color) -> void:

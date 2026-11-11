@@ -7,6 +7,9 @@ extends RefCounted
 
 signal rooms_changed
 
+## Which rooms a list asks for by their password (see get_rooms).
+enum Password { ANY, LOCKED, UNLOCKED }
+
 ## A game is always between two players.
 const PLAYERS := 2
 const MAX_NAME_LENGTH := 32
@@ -21,12 +24,21 @@ var _next_id := 1
 
 ## Rooms whose name and host together hold every word of `query`, read like every search field
 ## reads it (see SearchText), sorted by name. With `only_open`, rooms that cannot be joined (full,
-## or already in a game) are left out.
-func get_rooms(query := "", only_open := false) -> Array[RoomInfo]:
+## or already in a game) are left out. `mode` keeps only the rooms of that game mode (one of
+## RoomInfo.MODES; empty for any), and `password` only the locked or only the unlocked ones.
+func get_rooms(
+	query := "", only_open := false, mode := "", password := Password.ANY
+) -> Array[RoomInfo]:
 	var wanted := SearchText.needles(query)
 	var result: Array[RoomInfo] = []
 	for room in _rooms:
 		if only_open and not room.is_joinable():
+			continue
+		if not mode.is_empty() and room.mode_name() != mode:
+			continue
+		if password == Password.LOCKED and not room.has_password():
+			continue
+		if password == Password.UNLOCKED and room.has_password():
 			continue
 		var haystack := ("%s %s" % [room.room_name, room.host_name]).to_lower()
 		if SearchText.contains_all(haystack, wanted):

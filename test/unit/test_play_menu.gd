@@ -154,6 +154,128 @@ func test_the_list_follows_github_and_can_be_searched() -> void:
 	assert_true(empty.visible, "rooms that are closed drop off")
 
 
+func test_the_filters_open_in_a_window_that_holds_the_search_field() -> void:
+	var scene := _make_scene()
+	var window: Control = scene.get_node("%FiltersOverlay")
+	var search: LineEdit = scene.get_node("%SearchEdit")
+	assert_false(window.visible, "the filters start closed")
+	assert_true(window.is_ancestor_of(search), "the search field is one of them")
+	assert_false(search.is_visible_in_tree(), "so it is hidden with them")
+	assert_true(window.is_ancestor_of(scene.get_node("%CardsOption")))
+	assert_true(window.is_ancestor_of(scene.get_node("%PasswordOption")))
+	assert_false(
+		(scene.get_node("%Content") as Control).is_ancestor_of(window),
+		"a window over the screen: it takes no room from the list"
+	)
+
+	await get_tree().process_frame
+	var filters_button: Button = scene.get_node("%FiltersButton")
+	assert_false(filters_button.button_pressed, "the button is not lit while the filters are closed")
+	filters_button.pressed.emit()
+	assert_true(window.visible, "the button opens the window")
+	assert_true(search.is_visible_in_tree())
+	assert_true(filters_button.button_pressed, "and is lit while they are open")
+	await get_tree().process_frame
+
+	var dialog: Control = scene.get_node("%FiltersDialog")
+	var host: Control = scene.get_node("%HostButton")
+	assert_gt(dialog.global_position.x, filters_button.global_position.x + filters_button.size.x, "it starts at the right of the Filters button")
+	assert_almost_eq(dialog.global_position.y, filters_button.global_position.y, 0.5, "level with it, not under it")
+	assert_lt(dialog.global_position.x + dialog.size.x, host.global_position.x, "and ends before the Host Room button")
+
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	(scene.get_node("%FiltersBackdrop") as Control).gui_input.emit(click)
+	assert_false(window.visible, "a click outside it closes it")
+	assert_false(filters_button.button_pressed, "and the button goes dark again")
+
+	filters_button.pressed.emit()
+	var escape := InputEventAction.new()
+	escape.action = "ui_cancel"
+	escape.pressed = true
+	scene._unhandled_input(escape)
+	assert_false(window.visible, "so does Escape")
+	assert_null(scene.get_node_or_null("%FiltersDoneButton"), "there is no Done button: the list follows the filters as they change")
+
+
+func test_refreshing_is_a_circular_arrow_at_the_top_right_of_the_list() -> void:
+	var scene := _make_scene()
+	await get_tree().process_frame
+	var refresh: Control = scene.get_node("%RefreshButton")
+	var list_panel: Control = scene.get_node("Content/Layout/ListPanel")
+	assert_true(refresh is RefreshButton, "it is the arrow, not a text button")
+	assert_eq((refresh as Button).text, "")
+	assert_true(list_panel.is_ancestor_of(refresh), "it sits in the box of the list")
+	var panel_rect := list_panel.get_global_rect()
+	var corner := refresh.get_global_rect().get_center()
+	assert_gt(corner.x, panel_rect.position.x + panel_rect.size.x * 0.9, "at its right")
+	assert_lt(corner.y, panel_rect.position.y + 70.0, "at its top")
+	assert_false((scene.get_node("Content/Layout/Toolbar") as Node).is_ancestor_of(refresh), "no longer in the toolbar")
+
+
+func test_the_filters_narrow_the_list_even_when_closed() -> void:
+	var scene := _make_scene()
+	await _show_example_rooms(scene)
+	var button: Button = scene.get_node("%FiltersButton")
+	var cards: OptionButton = scene.get_node("%CardsOption")
+	var password: OptionButton = scene.get_node("%PasswordOption")
+	assert_eq(button.text, "Filters", "nothing narrows the list yet")
+
+	cards.select(2)
+	cards.item_selected.emit(2)
+	assert_eq(cards.get_item_text(2), RoomInfo.MODE_CUSTOM)
+	assert_eq(_listed(scene), ["Paradox Lounge"] as Array[String], "only rooms that allow custom cards")
+	assert_eq(button.text, "Filters (1)", "the closed button says a filter is in use")
+
+	cards.select(1)
+	cards.item_selected.emit(1)
+	assert_eq(_listed(scene), ["Home Game", "Temporal Rift"] as Array[String], "standard rooms")
+
+	password.select(1)
+	password.item_selected.emit(1)
+	assert_eq(password.get_item_text(1), "Locked")
+	assert_eq(_listed(scene), [] as Array[String], "no standard room is locked")
+	assert_eq(button.text, "Filters (2)")
+	var empty: Label = scene.get_node("%EmptyLabel")
+	assert_true(empty.visible)
+	assert_string_contains(empty.text, "these filters")
+
+	cards.select(0)
+	cards.item_selected.emit(0)
+	assert_eq(_listed(scene), ["Paradox Lounge"] as Array[String], "locked rooms")
+	password.select(2)
+	password.item_selected.emit(2)
+	assert_eq(password.get_item_text(2), "Unlocked")
+	assert_eq(_listed(scene), ["Home Game", "Temporal Rift"] as Array[String], "unlocked rooms")
+
+	(scene.get_node("%SearchEdit") as LineEdit).text = "nyx"
+	scene._on_search_changed("nyx")
+	assert_eq(_listed(scene), ["Home Game"] as Array[String], "with the search text as well")
+	assert_eq(button.text, "Filters (2)")
+
+
+func test_clear_empties_the_filters() -> void:
+	var scene := _make_scene()
+	await _show_example_rooms(scene)
+	var search: LineEdit = scene.get_node("%SearchEdit")
+	var cards: OptionButton = scene.get_node("%CardsOption")
+	var password: OptionButton = scene.get_node("%PasswordOption")
+	search.text = "lyra"
+	cards.select(2)
+	password.select(1)
+	scene._rebuild_list()
+	assert_eq(_listed(scene), ["Paradox Lounge"] as Array[String])
+	assert_eq((scene.get_node("%FiltersButton") as Button).text, "Filters (3)")
+
+	(scene.get_node("%ClearFiltersButton") as Button).pressed.emit()
+	assert_eq(search.text, "")
+	assert_eq(cards.selected, 0)
+	assert_eq(password.selected, 0)
+	assert_eq(_listed(scene), ["Home Game", "Paradox Lounge", "Temporal Rift"] as Array[String])
+	assert_eq((scene.get_node("%FiltersButton") as Button).text, "Filters")
+
+
 func test_the_list_says_why_it_is_empty() -> void:
 	var scene := _make_scene()
 	var empty: Label = scene.get_node("%EmptyLabel")
@@ -165,7 +287,7 @@ func test_the_list_says_why_it_is_empty() -> void:
 
 	scene.online.board.token = ""
 	scene._rebuild_list()
-	assert_string_contains(empty.text, "not set up")
+	assert_eq(empty.text, "No rooms found", "without a token it just says there are no rooms")
 
 
 # --- Hosting -------------------------------------------------------------------------------
