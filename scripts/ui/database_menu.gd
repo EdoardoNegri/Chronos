@@ -1,10 +1,11 @@
 extends Control
 ## Card database. It opens on a search form: fill in what you are looking for, choose how to
 ## show and sort the results, and press Search (or Enter in a text field). The results are a page
-## of their own; opening a card shows it large on the right, as in Create Cards, with a box on
-## the left holding its name and time cost, type, text, attack / defense and deck points. The
-## back arrow (or Escape) goes from a card to the results, from the results back to the form as
-## it was filled in, and from the form to the main menu. Clear empties the form.
+## of their own; opening a card shows it large on the right, as in Create Cards, with its name,
+## time cost, type, subtype, text, attack / defense and deck points on the left, each under a
+## caption in a box like the fields of the search form. The back arrow (or Escape) goes from a
+## card to the results, from the results back to the form as it was filled in, and from the form
+## to the main menu. Clear empties the form.
 ##
 ## The search form itself is a CardSearchForm, which the deck builder uses too.
 
@@ -28,6 +29,9 @@ const INK := Color(0.92, 0.9, 0.85)
 const MUTED := Color(0.62, 0.64, 0.74)
 const GOLD := Color(0.95, 0.8, 0.45)
 const LINE := Color(0.86, 0.7, 0.36, 0.18)
+## The value boxes of the card page, the same look as the text fields of the search form.
+const FIELD_COLOR := Color(0.05, 0.06, 0.1, 0.9)
+const FIELD_LINE := Color(0.86, 0.7, 0.36, 0.3)
 const BOX_COLOR := Color(0.11, 0.12, 0.2, 0.9)
 const HEADING_COLOR := Color(0.14, 0.15, 0.24, 0.95)
 const HOVER := Color(1, 1, 1, 0.05)
@@ -327,7 +331,7 @@ func _make_cells(cells: Array[String], heading: bool) -> HBoxContainer:
 
 ## The card's text box, which opens the card when clicked.
 func _make_text_entry(card: CardData) -> Control:
-	var entry := _make_card_text_box(card, false)
+	var entry := _make_card_text_box(card)
 	entry.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	entry.tooltip_text = card.card_name
 	entry.gui_input.connect(
@@ -363,7 +367,7 @@ func _open_card(card_id: String) -> void:
 	for child in _detail_info.get_children():
 		_detail_info.remove_child(child)
 		child.queue_free()
-	_detail_info.add_child(_make_card_text_box(card, true))
+	_detail_info.add_child(_make_card_table(card))
 	_show_page("detail")
 	_fit_detail_image()
 
@@ -387,9 +391,44 @@ func _fit_detail_image() -> void:
 	_detail_image.custom_minimum_size.x = maxf(0.0, minf(card_width, minf(room, _detail_body.size.x * 0.6)))
 
 
-## A box in rows: name with the time cost clock, type line, card text, attack / defense, and on
-## the card page the deck points at the bottom.
-func _make_card_text_box(card: CardData, full: bool) -> PanelContainer:
+## The card page's info: a field for each entry, laid out like the fields of the search form, with
+## its caption above and its value in a box under it. It sits straight in the panel around it.
+func _make_card_table(card: CardData) -> VBoxContainer:
+	var fields := VBoxContainer.new()
+	fields.add_theme_constant_override("separation", 14)
+	fields.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	_add_field(fields, "Name", card.card_name)
+	_add_field(fields, "Time cost", str(card.time_cost))
+	_add_field(fields, "Type", card.card_type)
+	if not card.subtype.strip_edges().is_empty():
+		_add_field(fields, "Subtype", card.subtype.strip_edges())
+	if not card.rules_text.strip_edges().is_empty():
+		_add_field(fields, "Text", card.rules_text.strip_edges())
+	if card.has_stats():
+		_add_field(fields, "Attack / Defense", "%d / %d" % [card.attack, card.defense])
+	_add_field(fields, "Deck points", str(points_list.points_for(card)))
+	return fields
+
+
+## One field of the card page: the caption in gold, and the value in a box under it that
+## looks like a text field of the search form.
+func _add_field(fields: VBoxContainer, caption: String, value: String) -> void:
+	var field := VBoxContainer.new()
+	field.add_theme_constant_override("separation", 4)
+	field.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	field.add_child(_make_text(caption, 17, GOLD))
+	var box := PanelContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_theme_stylebox_override("panel", _box(FIELD_COLOR, FIELD_LINE, 1, 8, Vector4(16, 12, 16, 12)))
+	box.add_child(_make_text(value, 20, INK))
+	field.add_child(box)
+	fields.add_child(field)
+
+
+## The compact box of the Text Only view: name with the time cost clock, type line, card text and
+## attack / defense.
+func _make_card_text_box(card: CardData) -> PanelContainer:
 	var box := PanelContainer.new()
 	box.add_theme_stylebox_override("panel", _box(BOX_COLOR, LINE, 1, 10))
 	var rows := VBoxContainer.new()
@@ -400,39 +439,23 @@ func _make_card_text_box(card: CardData, full: bool) -> PanelContainer:
 	var title_row := HBoxContainer.new()
 	title_row.add_theme_constant_override("separation", 12)
 	title_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var title := _make_text(card.card_name, 26 if full else 20, GOLD)
+	var title := _make_text(card.card_name, 20, GOLD)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(title)
 	var dial := ClockDial.new()
-	dial.custom_minimum_size = Vector2.ONE * (40.0 if full else 32.0)
+	dial.custom_minimum_size = Vector2.ONE * 32.0
 	dial.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	dial.accent = CardView.TYPE_ACCENTS.get(card.card_type, CardView.DEFAULT_ACCENT)
 	dial.value = card.time_cost
 	title_row.add_child(dial)
 	_add_box_row(rows, title_row, false)
 
-	_add_box_row(rows, _make_text(card.type_line(), 18 if full else 16, MUTED), true)
+	_add_box_row(rows, _make_text(card.type_line(), 16, MUTED), true)
 	if not card.rules_text.strip_edges().is_empty():
-		_add_box_row(rows, _make_text(card.rules_text.strip_edges(), 19 if full else 16, INK), true)
+		_add_box_row(rows, _make_text(card.rules_text.strip_edges(), 16, INK), true)
 	if card.has_stats():
-		_add_box_row(rows, _make_text("%d / %d" % [card.attack, card.defense], 19 if full else 16, INK), true)
-	if full:
-		_add_box_row(rows, _make_points_row(card), true)
+		_add_box_row(rows, _make_text("%d / %d" % [card.attack, card.defense], 16, INK), true)
 	return box
-
-
-## "Deck points" on the left and what the card costs against a deck's point budget on the right.
-func _make_points_row(card: CardData) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var label := _make_text("Deck points", 19, MUTED)
-	label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(label)
-	var value := _make_text(str(points_list.points_for(card)), 19, INK)
-	value.autowrap_mode = TextServer.AUTOWRAP_OFF
-	row.add_child(value)
-	return row
 
 
 func _add_box_row(rows: VBoxContainer, content: Control, line_above: bool) -> void:
