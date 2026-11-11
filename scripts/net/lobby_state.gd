@@ -38,8 +38,11 @@ func name_of(peer: int) -> String:
 	return _names.get(peer, "")
 
 
-## Opens a room hosted by this player. Gives {"room": RoomInfo} or {"error": message}.
-func host(peer: int, room_name: String, custom_cards: bool, password: String) -> Dictionary:
+## Opens a room hosted by this player (a local room, if `local_room`: see RoomInfo). Gives
+## {"room": RoomInfo} or {"error": message}.
+func host(
+	peer: int, room_name: String, custom_cards: bool, password: String, local_room := false
+) -> Dictionary:
 	if not is_registered(peer):
 		return {"error": "Say who you are first."}
 	if _room_of.has(peer):
@@ -47,7 +50,7 @@ func host(peer: int, room_name: String, custom_cards: bool, password: String) ->
 	var error := directory.validate_room_name(room_name)
 	if not error.is_empty():
 		return {"error": error}
-	var room := directory.host_room(room_name, custom_cards, password, name_of(peer))
+	var room := directory.host_room(room_name, custom_cards, password, name_of(peer), local_room)
 	if room == null:
 		return {"error": "Could not create the room."}
 	_host_of[room.id] = peer
@@ -71,6 +74,24 @@ func join(peer: int, room_id: StringName, password: String) -> Dictionary:
 	# Someone new: everyone says again that they are ready.
 	_ready.erase(_host_of[room_id])
 	return {"room": directory.get_room(room_id), "host_peer": _host_of[room_id]}
+
+
+## Seats `peer` as the second player of the local room that `host_peer` hosts: a player the host
+## controls themselves (see LobbyHost.SECOND_SEAT), so nobody has to join. Returns whether it was
+## done (it is not for a room that is not local, or whose seat is taken).
+func seat_second_player(peer: int, host_peer: int) -> bool:
+	var room_id: StringName = _room_of.get(host_peer, &"")
+	if room_id == &"" or _host_of.get(room_id, 0) != host_peer:
+		return false
+	if not is_registered(peer) or _room_of.has(peer) or _guest_of.has(room_id):
+		return false
+	if not directory.seat_second_player(room_id):
+		return false
+	_guest_of[room_id] = peer
+	_room_of[peer] = room_id
+	# Someone new: everyone says again that they are ready.
+	_ready.erase(host_peer)
+	return true
 
 
 ## Takes this player out of their room. A host leaving closes the room; a second player leaving

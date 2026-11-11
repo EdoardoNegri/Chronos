@@ -289,3 +289,110 @@ func test_a_standard_room_refuses_custom_cards_at_the_hosts_end() -> void:
 	lobby.check_deck(deck, [custom])
 	assert_true(lobby.deck_approved, "a custom cards room takes them")
 	lobby.stop_hosting()
+
+
+# --- A local room --------------------------------------------------------------------------
+
+
+func test_a_local_room_opens_without_a_server_and_is_never_listed() -> void:
+	var github := FakeGitHub.new()
+	var lobby := _hosting_lobby(github)
+	watch_signals(lobby)
+	lobby.host_local("Aeon", "Local Room")
+	assert_signal_emitted(lobby, "hosted")
+	assert_true(lobby.is_local_room())
+	assert_true(lobby.room.local_room)
+	assert_eq(lobby.room.room_name, "Local Room")
+	assert_true(lobby.is_player)
+	assert_eq(lobby.state, Lobby.State.CONNECTED)
+	assert_eq(lobby.hosting_port, 0, "no server is started, so nobody can reach it")
+	assert_eq(github.open_count(), 0, "nothing is put in the room list")
+	assert_eq(github.issues.size(), 0, "nor anywhere on GitHub")
+	assert_eq(lobby.listed_issue, 0)
+	assert_eq(lobby.listing_note, "")
+	assert_eq(lobby.opponent_name, "", "the host controls one player to begin with")
+
+	lobby.leave_room()
+	assert_null(lobby.room)
+	lobby.stop_hosting()
+	assert_eq(lobby.state, Lobby.State.OFFLINE)
+
+
+func test_a_local_room_needs_a_name() -> void:
+	var lobby := _hosting_lobby()
+	watch_signals(lobby)
+	lobby.host_local("Aeon", "   ")
+	assert_signal_emitted(lobby, "host_failed")
+	assert_signal_not_emitted(lobby, "hosted")
+	assert_false(lobby.is_player)
+
+
+func test_the_host_of_a_local_room_can_control_one_player_or_both() -> void:
+	var lobby := _hosting_lobby()
+	lobby.host_local("Aeon", "Local Room")
+	watch_signals(lobby)
+	lobby.control_both_players(true)
+	assert_eq(lobby.opponent_name, LobbyHost.SECOND_NAME, "both players: the second one is played from here")
+	assert_signal_emitted(lobby, "opponent_joined")
+	lobby.control_both_players(false)
+	assert_eq(lobby.opponent_name, "", "one player again")
+	assert_signal_emitted(lobby, "opponent_left")
+	lobby.stop_hosting()
+
+
+func test_a_local_game_starts_when_the_host_says_so_once_the_players_have_decks() -> void:
+	var lobby := _hosting_lobby()
+	lobby.host_local("Aeon", "Local Room")
+	watch_signals(lobby)
+	var unfinished := {"deck_name": "Tiny", "cards": {"official_zap": 1}}
+	lobby.start_local_game()
+	assert_signal_not_emitted(lobby, "game_started", "not without a deck")
+	lobby.check_deck(unfinished, [])
+	assert_true(lobby.deck_approved, "a deck that is not finished is fine")
+
+	lobby.control_both_players(true)
+	lobby.start_local_game()
+	assert_false(lobby.game_on, "the second player has no deck yet")
+	lobby.check_deck(unfinished, [], LobbyHost.SECOND_SEAT)
+	assert_true(lobby.second_approved, "any deck does for them too")
+	assert_signal_emitted(lobby, "second_deck_checked")
+
+	lobby.start_local_game()
+	assert_true(lobby.game_on)
+	assert_signal_emitted(lobby, "game_started")
+	lobby.stop_hosting()
+
+
+func test_a_local_game_can_be_started_with_one_player() -> void:
+	var lobby := _hosting_lobby()
+	lobby.host_local("Aeon", "Local Room")
+	lobby.check_deck({"deck_name": "Tiny", "cards": {"official_zap": 1}}, [])
+	lobby.start_local_game()
+	assert_true(lobby.game_on, "controlling one player is enough")
+	lobby.stop_hosting()
+
+
+func test_only_a_local_room_has_a_second_player_to_control_or_a_game_to_start() -> void:
+	var lobby := _hosting_lobby()
+	lobby.host_here("Aeon", "Duel", false, "")
+	assert_false(lobby.is_local_room())
+	lobby.control_both_players(true)
+	assert_eq(lobby.opponent_name, "", "an ordinary room waits for someone who joins")
+	lobby.check_deck(_official_deck_data(), [], LobbyHost.SECOND_SEAT)
+	assert_false(lobby.second_approved)
+	lobby.check_deck(_official_deck_data(), [])
+	lobby.start_local_game()
+	assert_false(lobby.game_on, "an ordinary game starts when both are ready")
+	lobby.stop_hosting()
+
+
+func test_a_room_is_played_with_the_rulebook_unless_its_options_are_changed() -> void:
+	var lobby := _hosting_lobby()
+	assert_true(lobby.game_options.is_default())
+	lobby.host_local("Aeon", "Local Room")
+	assert_true(lobby.game_options.is_default(), "a local room begins with the rulebook's values")
+	lobby.game_options.hand_size = 6
+	assert_false(lobby.game_options.is_default())
+	lobby.leave_room()
+	assert_true(lobby.game_options.is_default(), "and leaving it forgets what was changed")
+	lobby.stop_hosting()

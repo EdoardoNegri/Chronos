@@ -7,6 +7,11 @@ extends Node
 ## (its rules are a LobbyHost) and puts it in the room list (a RoomListing, see RoomBoard). Another
 ## game joins by connecting to the address in the list (connect_to_server, then join_room).
 ##
+## A local room (host_local) has no server and is not in the room list: it is for its host alone,
+## who can use any deck and starts the game when they like (start_local_game). They control one
+## player, or both once the second player has a deck (control_both_players). The second player has
+## no connection; this game plays for them, so everything is told to it by calls to oneself.
+##
 ## Godot's remote calls (@rpc) need the same node, with the same script, on both ends of a
 ## connection, so this script is both ends: `request_*` calls go from a player to the host, `on_*`
 ## calls from the host to a player. The host's own game skips the network and calls itself.
@@ -28,6 +33,8 @@ signal room_closed
 signal chat_received(from_name: String, text: String)
 ## The host checked the deck I chose: `problems` is empty if it may be played (see DeckCheck).
 signal deck_checked(problems: Array)
+## The same for the second player of my local room, whom I control too.
+signal second_deck_checked(problems: Array)
 ## Whether I or the other player in my room is ready changed (my_ready, opponent_ready).
 signal ready_changed
 ## Both players in my room are ready: the game starts.
@@ -67,11 +74,16 @@ var notice := ""
 ## In my room: whether the host approved my deck, whether I and the other player are ready, and
 ## whether the game has started.
 var deck_approved := false
+## In my local room: whether the deck of the second player, whom I control, was approved.
+var second_approved := false
 var my_ready := false
 var opponent_ready := false
 var game_on := false
 ## The list of open rooms that players see (see RoomBoard). Tests give one with a fake GitHub.
 var board: RoomBoard
+## The values of the rules the game of my room is played with. The rulebook's, unless my local room
+## changes them (see GameOptions).
+var game_options := GameOptions.new()
 
 ## Whether this game hosts the room it is in, and the port its server listens on.
 var is_player := false
@@ -175,6 +187,51 @@ func host_here(who: String, room_name: String, custom_cards: bool, password: Str
 	_listing.start(room, hosting_port)
 
 
+## Opens a local room: it runs on this computer only, with no server and no place in the room list,
+## so nobody can see or join it. Any deck can be used in it. The host controls one player until
+## they ask for both (control_both_players). The answer is `hosted` or `host_failed`.
+func host_local(who: String, room_name: String) -> void:
+	var error := RoomDirectory.check_room_name(room_name)
+	if not error.is_empty():
+		host_failed.emit(error)
+		return
+	disconnect_from_server()
+	stop_hosting()
+	is_player = true
+	player_name = who
+	_host = LobbyHost.new(_deliver)
+	_host.state.register(SERVER_ID, who)
+	_set_state(State.CONNECTED)
+	_host.open_room(SERVER_ID, room_name, true, "", true)
+	if room == null:
+		stop_hosting()
+
+
+## In my local room: starts the game, once the players I control have decks (any decks). The answer
+## is game_started.
+func start_local_game() -> void:
+	if _host != null and is_local_room():
+		_host.start_local_game(SERVER_ID)
+
+
+## Whether the room I am in is a local room.
+func is_local_room() -> bool:
+	return room != null and room.local_room
+
+
+## In my local room: whether I control the second player as well as the first. Without them the
+## room has one player and waits for another, as any room does. (The room screen asks for them once
+## the second player has a deck.)
+func control_both_players(both: bool) -> void:
+	if _host == null or not is_local_room():
+		return
+	if both:
+		_host.seat_second_player(SERVER_ID)
+	else:
+		_host.unseat_second_player(SERVER_ID)
+		second_approved = false
+
+
 ## Stops hosting from this computer: takes the room off the list, and closes the server, the tunnel
 ## and the port that were opened.
 func stop_hosting() -> void:
@@ -216,8 +273,19 @@ func _on_listing_note_changed() -> void:
 func _deliver(peer: int, method: StringName, args: Array) -> void:
 	if peer == SERVER_ID:
 		callv(method, args)
+	elif peer == LobbyHost.SECOND_SEAT:
+		_tell_second_player(method, args)
 	else:
 		callv("rpc_id", [peer, method] + args)
+
+
+## What the rules tell the second player of a local room, who is played from this game: only the
+## check of their deck matters (the host sees whether they are ready as the other player's state).
+func _tell_second_player(method: StringName, args: Array) -> void:
+	if method == &"on_deck_checked":
+		var problems: Array = args[0]
+		second_approved = problems.is_empty()
+		second_deck_checked.emit(problems)
 
 
 ## Passes what a player asked for over the network to the host's rules.
@@ -408,18 +476,23 @@ func _leave_host(connection: int) -> void:
 
 
 ## Asks the host to check the deck I chose: `deck_data` and `sent_cards` as DeckData.to_dict and
-## DeckCheck.send_cards give them. The answer is deck_checked.
-func check_deck(deck_data: Dictionary, sent_cards: Array) -> void:
-	deck_approved = false
+## DeckCheck.send_cards give them. The answer is deck_checked. In a local room `seat` can be
+## LobbyHost.SECOND_SEAT, for the second player (the answer is second_deck_checked).
+func check_deck(deck_data: Dictionary, sent_cards: Array, seat := SERVER_ID) -> void:
+	if seat == SERVER_ID:
+		deck_approved = false
+	else:
+		second_approved = false
 	if room != null:
-		_ask(&"check_deck", &"request_deck_check", [deck_data, sent_cards])
+		_ask(&"check_deck", &"request_deck_check", [deck_data, sent_cards], seat)
 
 
 ## Says I am ready to play (or not any more). The answer is ready_changed, and game_started once
-## both players are ready.
-func set_ready(is_ready: bool) -> void:
+## both players are ready. In a local room `seat` can be LobbyHost.SECOND_SEAT, for the second
+## player.
+func set_ready(is_ready: bool, seat := SERVER_ID) -> void:
 	if room != null:
-		_ask(&"set_ready", &"request_set_ready", [is_ready])
+		_ask(&"set_ready", &"request_set_ready", [is_ready], seat)
 
 
 ## Says something to the other player in my room.
@@ -429,10 +502,11 @@ func send_chat(text: String) -> void:
 
 
 ## Sends a request to the host: straight to its rules when this game is the host, otherwise over
-## the network.
-func _ask(action: StringName, request: StringName, args: Array) -> void:
+## the network. `seat` is who it is for (only the host's own game can ask for the second seat of a
+## local room).
+func _ask(action: StringName, request: StringName, args: Array, seat := SERVER_ID) -> void:
 	if _host != null:
-		_host.callv(action, [SERVER_ID] + args)
+		_host.callv(action, [seat] + args)
 	elif state == State.CONNECTED and _server_reachable():
 		callv("rpc_id", [SERVER_ID, request] + args)
 
@@ -441,9 +515,11 @@ func _clear_room() -> void:
 	room = null
 	opponent_name = ""
 	deck_approved = false
+	second_approved = false
 	my_ready = false
 	opponent_ready = false
 	game_on = false
+	game_options = GameOptions.new()
 
 
 func _fail(message: String) -> void:

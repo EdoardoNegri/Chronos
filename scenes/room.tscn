@@ -5,6 +5,7 @@
 [ext_resource type="Theme" path="res://assets/themes/menu_theme.tres" id="3_theme"]
 [ext_resource type="Script" path="res://scripts/ui/back_arrow.gd" id="9_back"]
 [ext_resource type="Script" path="res://scripts/ui/settings_button.gd" id="11_settings"]
+[ext_resource type="Script" path="res://scripts/ui/number_stepper.gd" id="12_stepper"]
 
 [node name="Room" type="Control"]
 layout_mode = 3
@@ -57,13 +58,35 @@ theme_override_constants/margin_bottom = 14
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="TitleLabel" type="Label" parent="Content/Layout/HeaderPanel/HeaderMargin/HeaderColumn"]
+[node name="TitleRow" type="HBoxContainer" parent="Content/Layout/HeaderPanel/HeaderMargin/HeaderColumn"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="Content/Layout/HeaderPanel/HeaderMargin/HeaderColumn/TitleRow"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
 theme_override_font_sizes/font_size = 32
 text = "Room"
 text_overrun_behavior = 3
+
+[node name="ReadyButton" type="Button" parent="Content/Layout/HeaderPanel/HeaderMargin/HeaderColumn/TitleRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+disabled = true
+text = "Ready"
+
+[node name="StartButton" type="Button" parent="Content/Layout/HeaderPanel/HeaderMargin/HeaderColumn/TitleRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+disabled = true
+text = "Start"
 
 [node name="InfoLabel" type="Label" parent="Content/Layout/HeaderPanel/HeaderMargin/HeaderColumn"]
 unique_name_in_owner = true
@@ -73,6 +96,7 @@ theme_override_font_sizes/font_size = 16
 text = "Hosted by"
 
 [node name="PlayersRow" type="HBoxContainer" parent="Content/Layout"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 14
 
@@ -128,15 +152,154 @@ tooltip_text = "Your decks that can be played in this room. Type to search them.
 placeholder_text = "Choose your deck: type to search"
 clear_button_enabled = true
 
-[node name="ReadyButton" type="Button" parent="Content/Layout/DeckRow"]
+[node name="SecondDeckRow" type="HBoxContainer" parent="Content/Layout"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 0)
+visible = false
 layout_mode = 2
-theme_type_variation = &"PrimaryButton"
-disabled = true
-text = "Ready"
+theme_override_constants/separation = 12
+
+[node name="SecondDeckEdit" type="LineEdit" parent="Content/Layout/SecondDeckRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Any of your decks, finished or not. Type to search them."
+placeholder_text = "Player 2's deck: type to search"
+clear_button_enabled = true
+
+[node name="OptionsPanel" type="PanelContainer" parent="Content/Layout"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="OptionsMargin" type="MarginContainer" parent="Content/Layout/OptionsPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="OptionsColumn" type="VBoxContainer" parent="Content/Layout/OptionsPanel/OptionsMargin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="OptionsHeader" type="HBoxContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn"]
+layout_mode = 2
+
+[node name="OptionsTitle" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
+theme_override_font_sizes/font_size = 22
+text = "Options"
+
+[node name="DefaultsButton" type="Button" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Back to the values of the rulebook."
+text = "Defaults"
+
+[node name="OptionsGrid" type="GridContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 12
+columns = 3
+
+[node name="HandField" type="VBoxContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "How many cards each player draws at the start (rule 2.3: 7 in the rulebook)."
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid/HandField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Cards in the opening hand"
+
+[node name="HandStepper" type="PanelContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid/HandField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "How many cards each player draws at the start (rule 2.3: 7 in the rulebook)."
+script = ExtResource("12_stepper")
+min_value = 0
+max_value = 30
+
+[node name="MulliganField" type="VBoxContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "How far each card replaced in the mulligan moves the starting timer toward the player (rule 2.4: 5 in the rulebook)."
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid/MulliganField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Mulligan cost"
+
+[node name="MulliganStepper" type="PanelContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid/MulliganField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "How far each card replaced in the mulligan moves the starting timer toward the player (rule 2.4: 5 in the rulebook)."
+script = ExtResource("12_stepper")
+min_value = 0
+max_value = 100
+
+[node name="DrawField" type="VBoxContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "How much time paying to draw a card costs (rule 3.4: 100 in the rulebook)."
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid/DrawField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Forced draw cost"
+
+[node name="DrawStepper" type="PanelContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid/DrawField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "How much time paying to draw a card costs (rule 3.4: 100 in the rulebook)."
+script = ExtResource("12_stepper")
+min_value = 0
+max_value = 1000
+
+[node name="TimerField" type="VBoxContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Where the shared timer starts: positive favors Player 1, negative Player 2, and 0 is even (rule 2.2)."
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid/TimerField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Starting timer"
+
+[node name="TimerStepper" type="PanelContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid/TimerField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Where the shared timer starts: positive favors Player 1, negative Player 2, and 0 is even (rule 2.2)."
+script = ExtResource("12_stepper")
+min_value = -1000
+max_value = 1000
+
+[node name="StarterField" type="VBoxContainer" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Who acts first when the timer is at 0. Automatic is rule 2.1: by points, and a coin toss if tied."
+theme_override_constants/separation = 4
+
+[node name="Label" type="Label" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid/StarterField"]
+layout_mode = 2
+theme_type_variation = &"FieldLabel"
+text = "Who starts"
+
+[node name="StarterOption" type="OptionButton" parent="Content/Layout/OptionsPanel/OptionsMargin/OptionsColumn/OptionsGrid/StarterField"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Who acts first when the timer is at 0. Automatic is rule 2.1: by points, and a coin toss if tied."
+
 
 [node name="ChatPanel" type="PanelContainer" parent="Content/Layout"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 theme_type_variation = &"Card"

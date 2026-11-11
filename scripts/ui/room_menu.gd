@@ -5,11 +5,17 @@ extends Control
 ##
 ## Each player chooses one of their decks that can be played in this room (see DeckCheck), by
 ## typing to search them. The host's game checks the deck again, and only then can the player press
-## Ready; their box turns green for both players to see. When both are ready, the game starts. (The
+## Ready, at the right of the title; their box turns green for both players to see. When both are ready, the game starts. (The
 ## game itself will take place here.)
 ##
 ## The back arrow (or Escape) leaves the room and goes back to the room list; if the host leaves,
 ## the room closes and leaves the list.
+##
+## A local room (see RoomInfo) is the player's alone, so it has no chat, no names of players and no
+## Ready: just the title with a Start button at its right, and a deck field for each player. Any deck
+## can be chosen, a deck that is not finished too. With one deck chosen the player controls one
+## player; with two they control both. Below the decks are the options: values of the rules to try
+## out (see GameOptions), such as the cards in the opening hand. Start starts the game.
 
 const PLAY_SCENE := "res://scenes/play.tscn"
 const GOLD := "f2cc73"
@@ -41,6 +47,9 @@ var _allowed: Array[String] = []
 ## The deck sent to the host to be checked ("" if none is chosen).
 var _chosen := ""
 var _deck_suggestions: WordSuggestions
+## In a local room: the deck chosen for the second player ("" if none), and its field's suggestions.
+var _chosen_second := ""
+var _second_suggestions: WordSuggestions
 ## What the room screen last said about readiness and the room list, so nothing is said twice.
 var _was_ready := false
 var _was_opponent_ready := false
@@ -48,13 +57,25 @@ var _unready_asked := false
 var _last_listing_note := ""
 
 @onready var _title_label: Label = %TitleLabel
+@onready var _start_button: Button = %StartButton
 @onready var _info_label: Label = %InfoLabel
+@onready var _players_row: Control = %PlayersRow
+@onready var _chat_panel: Control = %ChatPanel
 @onready var _you_panel: PanelContainer = %YouPanel
 @onready var _you_label: Label = %YouLabel
 @onready var _opponent_panel: PanelContainer = %OpponentPanel
 @onready var _opponent_label: Label = %OpponentLabel
 @onready var _deck_edit: LineEdit = %DeckEdit
 @onready var _ready_button: Button = %ReadyButton
+@onready var _second_row: Control = %SecondDeckRow
+@onready var _second_edit: LineEdit = %SecondDeckEdit
+@onready var _options_panel: Control = %OptionsPanel
+@onready var _hand_stepper: NumberStepper = %HandStepper
+@onready var _mulligan_stepper: NumberStepper = %MulliganStepper
+@onready var _draw_stepper: NumberStepper = %DrawStepper
+@onready var _timer_stepper: NumberStepper = %TimerStepper
+@onready var _starter_option: OptionButton = %StarterOption
+@onready var _defaults_button: Button = %DefaultsButton
 @onready var _chat_log: RichTextLabel = %ChatLog
 @onready var _chat_edit: LineEdit = %ChatEdit
 @onready var _send_button: Button = %SendButton
@@ -88,6 +109,12 @@ func _ready() -> void:
 
 	var room := online.room
 	_title_label.text = room.room_name
+	if room.local_room:
+		_setup_local_room()
+		_load_decks()
+		_show_ready()
+		_deck_edit.grab_focus()
+		return
 	var info := "Hosted by %s  ·  %s" % [room.host_name, room.mode_name()]
 	if room.has_password():
 		info += "  ·  Password"
@@ -137,7 +164,10 @@ func _load_decks() -> void:
 	_allowed.clear()
 	for deck_name in decks.list_names():
 		var deck := decks.load_deck(deck_name)
-		if deck != null and DeckCheck.problems(deck, _cards, points_list, online.room.custom_cards, _official).is_empty():
+		if deck == null:
+			continue
+		# In a local room any deck is fine, one that is not finished too.
+		if online.room.local_room or DeckCheck.problems(deck, _cards, points_list, online.room.custom_cards, _official).is_empty():
 			_allowed.append(deck_name)
 
 
@@ -212,6 +242,9 @@ func _on_game_started() -> void:
 
 ## The Ready button, the deck field and the green boxes, as things stand.
 func _show_ready() -> void:
+	if online.is_local_room():
+		_show_start()
+		return
 	var can_be_ready := online.deck_approved and not _chosen.is_empty()
 	_ready_button.disabled = online.game_on or not (can_be_ready or online.my_ready)
 	_ready_button.text = "Not ready" if online.my_ready else "Ready"
@@ -239,6 +272,104 @@ func _say_listing() -> void:
 	_last_listing_note = note
 
 
+# --- A local room --------------------------------------------------------------------------
+
+
+## What a local room shows: the title with its Start button, and a deck field for each player. No
+## chat, no names of players, no Ready.
+func _setup_local_room() -> void:
+	_info_label.visible = false
+	_players_row.visible = false
+	_chat_panel.visible = false
+	_ready_button.visible = false
+	_start_button.visible = true
+	_second_row.visible = true
+	_options_panel.visible = true
+	_setup_options()
+	_deck_edit.placeholder_text = "Player 1's deck: type to search"
+	_start_button.pressed.connect(online.start_local_game)
+	_second_edit.text_submitted.connect(_choose_second_deck)
+	_second_edit.text_changed.connect(_on_second_deck_text_changed)
+	_second_suggestions = WordSuggestions.new()
+	_second_suggestions.whole_text = true
+	_second_suggestions.attach(_second_edit, self, func() -> Array[String]: return _allowed)
+	_second_suggestions.accepted.connect(_choose_second_deck)
+	online.second_deck_checked.connect(_on_second_deck_checked)
+
+
+## The options of the game, which are the ones the room's game will be played with.
+func _setup_options() -> void:
+	for name in GameOptions.STARTER_NAMES:
+		_starter_option.add_item(name)
+	_show_options()
+	# After the values are shown, so showing them changes nothing.
+	_hand_stepper.value_changed.connect(func(value: float) -> void: online.game_options.hand_size = int(value))
+	_mulligan_stepper.value_changed.connect(func(value: float) -> void: online.game_options.mulligan_cost = int(value))
+	_draw_stepper.value_changed.connect(func(value: float) -> void: online.game_options.forced_draw_cost = int(value))
+	_timer_stepper.value_changed.connect(func(value: float) -> void: online.game_options.starting_timer = int(value))
+	_starter_option.item_selected.connect(func(index: int) -> void: online.game_options.starter = index as GameOptions.Starter)
+	_defaults_button.pressed.connect(_reset_options)
+
+
+## Shows the game's options in the fields.
+func _show_options() -> void:
+	var options := online.game_options
+	_hand_stepper.value = options.hand_size
+	_mulligan_stepper.value = options.mulligan_cost
+	_draw_stepper.value = options.forced_draw_cost
+	_timer_stepper.value = options.starting_timer
+	_starter_option.select(options.starter)
+
+
+func _reset_options() -> void:
+	online.game_options.reset()
+	_show_options()
+
+
+## Chooses a deck for the second player, as _choose_deck does for the first. With a deck for each
+## the player controls both players.
+func _choose_second_deck(typed: String) -> void:
+	var deck_name := _allowed_name(typed)
+	if deck_name.is_empty() or deck_name == _chosen_second:
+		return
+	var deck := decks.load_deck(deck_name)
+	if deck == null:
+		return
+	_chosen_second = deck_name
+	_second_edit.text = deck_name
+	_second_edit.caret_column = deck_name.length()
+	online.control_both_players(true)
+	online.check_deck(deck.to_dict(), DeckCheck.send_cards(deck, _cards, _official), LobbyHost.SECOND_SEAT)
+	_show_ready()
+
+
+## Typing something else gives up the second player's deck, and the player controls one player again.
+func _on_second_deck_text_changed(text: String) -> void:
+	if not _chosen_second.is_empty() and text.strip_edges() != _chosen_second:
+		_chosen_second = ""
+		online.control_both_players(false)
+		_show_ready()
+
+
+func _on_second_deck_checked(_problems: Array) -> void:
+	_show_ready()
+
+
+## The Start button and the deck fields of a local room, as things stand: Start can be pressed once
+## the first player has a deck (and the second, if they have one), until the game has started.
+func _show_start() -> void:
+	var first_has_deck := online.deck_approved and not _chosen.is_empty()
+	var second_is_fine := _chosen_second.is_empty() or online.second_approved
+	_start_button.disabled = online.game_on or not (first_has_deck and second_is_fine)
+	_deck_edit.editable = not online.game_on
+	_second_edit.editable = not online.game_on
+	# The options are fixed once the game has started.
+	for stepper: NumberStepper in [_hand_stepper, _mulligan_stepper, _draw_stepper, _timer_stepper]:
+		stepper.editable = not online.game_on
+	_starter_option.disabled = online.game_on
+	_defaults_button.disabled = online.game_on
+
+
 # --- Chat ----------------------------------------------------------------------------------
 
 
@@ -256,12 +387,19 @@ func _send() -> void:
 
 func _on_opponent_joined(who: String) -> void:
 	_opponent = who
+	if online.is_local_room():
+		_show_ready()
+		return
 	_show_opponent()
 	_console("%s joined." % who)
 	_show_ready()
 
 
 func _on_opponent_left() -> void:
+	if online.is_local_room():
+		_opponent = ""
+		_show_ready()
+		return
 	_console("%s left the room." % _opponent)
 	_opponent = ""
 	_was_opponent_ready = false

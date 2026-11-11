@@ -202,3 +202,25 @@ func test_number_stepper_holding_speeds_up() -> void:
 	before = stepper.value
 	stepper._repeat()
 	assert_eq(stepper.value, before, "letting go stops it")
+
+
+func test_number_stepper_can_go_below_zero_and_be_locked() -> void:
+	var stepper := NumberStepper.new()
+	stepper.min_value = -100
+	stepper.max_value = 100
+	add_child_autofree(stepper)
+	stepper.value = -40
+	assert_eq(stepper.value, -40, "a range that starts below 0")
+	assert_eq(stepper._edit.text, "-40")
+	stepper._edit.text = "-250"
+	stepper._edit.text_changed.emit("-250")
+	assert_eq(stepper.value, -100, "typing is kept in the range")
+	assert_gte(stepper._edit.max_length, "-100".length(), "the minus sign has room")
+
+	stepper.editable = false
+	assert_false(stepper._edit.editable, "locked: nothing can be typed")
+	assert_true(stepper._plus.disabled)
+	assert_true(stepper._minus.disabled, "and the buttons do nothing")
+	stepper.editable = true
+	assert_true(stepper._edit.editable)
+	assert_false(stepper._plus.disabled)

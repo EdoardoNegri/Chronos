@@ -446,3 +446,86 @@ func test_a_notice_waiting_for_the_player_is_shown_once() -> void:
 	var scene := _make_scene("Tester", lobby)
 	assert_eq((scene.get_node("%Status") as Label).text, "The host closed the room.")
 	assert_eq(lobby.notice, "", "it is not shown again")
+
+
+## The controls of the host dialog that are in view: fields, choices and buttons.
+func _visible_form_controls(scene: Control) -> Array[Control]:
+	var form: Control = scene.get_node("HostOverlay/Center/Dialog/Margin/Form")
+	var shown: Array[Control] = []
+	for control: Control in form.find_children("*", "Control", true, false):
+		if control.is_visible_in_tree() and (control is LineEdit or control is OptionButton or control is Button):
+			shown.append(control)
+	return shown
+
+
+func test_the_host_window_has_a_switch_at_the_right_of_its_title_between_public_and_local() -> void:
+	var scene := _make_scene()
+	(scene.get_node("%HostButton") as Button).pressed.emit()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var toggle: ToggleSwitch = scene.get_node("%LocalToggle")
+	var title: Label = scene.get_node("HostOverlay/Center/Dialog/Margin/Form/TitleRow/DialogTitle")
+	assert_eq(title.text, "Room", "the window is titled Room")
+	assert_eq(toggle.text, "Public", "a public room unless switched")
+	for state in ["normal", "hover", "pressed", "hover_pressed", "focus"]:
+		assert_true(toggle.get_theme_stylebox(state) is StyleBoxEmpty, "no box around the switch (%s)" % state)
+	var white := toggle.get_theme_color("font_color")
+	assert_eq(toggle.get_theme_color("font_pressed_color"), white, "its text is white switched on too (Local)")
+	assert_ne(toggle.get_theme_color("font_hover_color"), white, "and yellow while the pointer is on it")
+	assert_eq(toggle.get_theme_color("font_hover_pressed_color"), toggle.get_theme_color("font_hover_color"))
+	assert_false(toggle.button_pressed)
+	assert_gte(toggle.global_position.x, title.get_global_rect().end.x - 1.0, "at the right of the title")
+	assert_gt(toggle.get_global_rect().get_center().y, title.global_position.y, "on the same row")
+	assert_lt(toggle.get_global_rect().get_center().y, title.get_global_rect().end.y)
+	assert_true((scene.get_node("%RoomNameEdit") as Control).visible)
+	assert_true((scene.get_node("%PasswordEdit") as Control).visible)
+	assert_true((scene.get_node("%GameModeOption") as Control).visible)
+
+	toggle.button_pressed = true
+	assert_eq(toggle.text, "Local", "switched, it says local")
+	assert_eq(title.text, "Room", "the title stays")
+	assert_true((scene.get_node("%LocalHint") as Control).visible, "it says what a local room is")
+	var names: Array[String] = []
+	for control in _visible_form_controls(scene):
+		if control == toggle:
+			continue
+		assert_true(control is Button, "%s should be hidden" % control.name)
+		names.append((control as Button).text)
+	assert_eq(names, ["Cancel", "Create"] as Array[String], "all that is left to do: cancel or create")
+	assert_false((scene.get_node("%RoomNameEdit") as Control).visible, "the name is fixed: nothing to change")
+	assert_false((scene.get_node("%PasswordEdit") as Control).visible)
+	assert_false((scene.get_node("%GameModeOption") as Control).visible)
+
+	toggle.button_pressed = false
+	assert_eq(toggle.text, "Public")
+	assert_true((scene.get_node("%RoomNameEdit") as Control).visible, "the fields come back")
+
+
+func test_creating_a_local_room_opens_it_here_as_Local_Room_and_never_puts_it_on_github() -> void:
+	var scene := _make_scene()
+	(scene.get_node("%HostButton") as Button).pressed.emit()
+	(scene.get_node("%RoomNameEdit") as LineEdit).text = ""
+	(scene.get_node("%LocalToggle") as ToggleSwitch).button_pressed = true
+	(scene.get_node("%CreateButton") as Button).pressed.emit()
+	assert_true(scene.online.is_local_room(), "the room is a local one")
+	assert_eq(scene.online.room.room_name, "Local Room", "always with this name, whatever the name field says")
+	assert_eq(scene.online.hosting_port, 0, "no server was started")
+	assert_eq(github.open_count(), 0, "nothing was put in the room list")
+	assert_eq(github.issues.size(), 0, "nothing at all went to GitHub")
+	assert_false((scene.get_node("%HostOverlay") as Control).visible, "the window closed: on to the room")
+	scene.online.stop_hosting()
+
+
+func test_cancelling_a_local_room_opens_nothing_and_the_window_starts_ordinary_again() -> void:
+	var scene := _make_scene()
+	(scene.get_node("%HostButton") as Button).pressed.emit()
+	(scene.get_node("%LocalToggle") as ToggleSwitch).button_pressed = true
+	(scene.get_node("%CancelButton") as Button).pressed.emit()
+	assert_false((scene.get_node("%HostOverlay") as Control).visible)
+	assert_false(scene.online.is_local_room())
+	assert_null(scene.online.room)
+
+	(scene.get_node("%HostButton") as Button).pressed.emit()
+	assert_false((scene.get_node("%LocalToggle") as ToggleSwitch).button_pressed, "a public room again")
+	assert_eq((scene.get_node("%LocalToggle") as ToggleSwitch).text, "Public")
+	assert_true((scene.get_node("%RoomNameEdit") as Control).visible)

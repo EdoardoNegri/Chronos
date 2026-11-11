@@ -15,6 +15,9 @@ var players: int
 var max_players: int
 var in_game: bool
 var custom_cards: bool
+## A local room runs on this computer only: it is never in the room list and nobody can join it.
+## Its host controls both players, and any deck can be used in it.
+var local_room := false
 ## Whether the room has a password. This is all a player browsing rooms ever learns about it.
 var locked: bool
 ## What the room's password hashes to, or empty. Only the server that checks the password has it,
@@ -54,6 +57,7 @@ func to_dict() -> Dictionary:
 		"in_game": in_game,
 		"custom_cards": custom_cards,
 		"locked": locked,
+		"local_room": local_room,
 	}
 
 
@@ -68,6 +72,7 @@ static func from_dict(data: Dictionary) -> RoomInfo:
 		bool(data.get("custom_cards", false))
 	)
 	room.locked = bool(data.get("locked", false))
+	room.local_room = bool(data.get("local_room", false))
 	return room
 
 
@@ -96,4 +101,4 @@ func is_full() -> bool:
 
 
 func is_joinable() -> bool:
-	return not is_full() and not in_game
+	return not is_full() and not in_game and not local_room

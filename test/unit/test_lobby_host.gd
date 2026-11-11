@@ -111,3 +111,78 @@ func test_someone_who_never_said_who_they_are_gets_nowhere() -> void:
 	host.chat(3, "hi")
 	assert_eq(_got(3, &"on_deck_checked"), [], "outside a room nothing is checked")
 	assert_eq(_got(HOST, &"on_chat"), [])
+
+
+# --- A local room: the host controls both players ------------------------------------------
+
+
+func _open_local_room() -> LobbyHost:
+	var local := LobbyHost.new(func(peer: int, method: StringName, args: Array) -> void: sent.append([peer, method, args]))
+	local.points_list = PointsList.new("user://no_points_list.json")
+	local.state.register(HOST, "Aeon")
+	local.open_room(HOST, "Practice", false, "", true)
+	return local
+
+
+func test_the_host_of_a_local_room_takes_the_second_seat_and_gives_it_up() -> void:
+	var local := _open_local_room()
+	assert_true(local.state.directory.get_room(local.state.room_of(HOST)).local_room)
+	local.seat_second_player(HOST)
+	assert_eq(_got(HOST, &"on_opponent_joined").back()[2], [LobbyHost.SECOND_NAME], "the host has company")
+	assert_eq(local.state.opponent_of(HOST), LobbyHost.SECOND_SEAT)
+	local.seat_second_player(HOST)
+	assert_eq(_got(HOST, &"on_opponent_joined").size(), 1, "only one second seat")
+
+	local.unseat_second_player(HOST)
+	assert_eq(_got(HOST, &"on_opponent_left").size(), 1)
+	assert_eq(local.state.opponent_of(HOST), 0)
+	local.seat_second_player(HOST)
+	assert_eq(_got(HOST, &"on_opponent_joined").size(), 2, "and it can be taken again")
+
+
+func test_nobody_else_can_join_a_local_room_and_an_ordinary_room_has_no_second_seat_to_take() -> void:
+	var local := _open_local_room()
+	local.hello(GUEST, "Bob")
+	local.join(GUEST, str(local.state.room_of(HOST)), "")
+	assert_eq(_got(GUEST, &"on_join_result").back()[2][0], ERR_BUSY, "it is full to anyone but the host")
+
+	# The room of the other tests is an ordinary one.
+	host.seat_second_player(HOST)
+	assert_eq(_got(HOST, &"on_opponent_joined"), [], "no second seat in an ordinary room")
+
+
+func test_every_deck_passes_in_a_local_room_and_the_host_starts_the_game() -> void:
+	var local := _open_local_room()
+	local.seat_second_player(HOST)
+	var unfinished := {"deck_name": "Tiny", "cards": {"official_zap": 1}}
+	local.start_local_game(HOST)
+	assert_eq(_got(HOST, &"on_game_start"), [], "not before the decks are chosen")
+	assert_eq(_got(HOST, &"on_deck_checked").back()[2], [["Choose a deck first."]])
+
+	local.check_deck(HOST, unfinished, [])
+	assert_eq(_got(HOST, &"on_deck_checked").back()[2], [[]], "a deck that is not finished passes")
+	local.start_local_game(HOST)
+	assert_eq(_got(HOST, &"on_game_start"), [], "the second player has no deck yet")
+	local.check_deck(LobbyHost.SECOND_SEAT, unfinished, [])
+	assert_eq(_got(LobbyHost.SECOND_SEAT, &"on_deck_checked").back()[2], [[]], "for the second player too")
+
+	local.start_local_game(HOST)
+	assert_eq(_got(HOST, &"on_game_start").size(), 1, "nobody has to say they are ready")
+	assert_eq(_got(LobbyHost.SECOND_SEAT, &"on_game_start").size(), 1)
+	assert_true(local.state.directory.get_room(local.state.room_of(HOST)).in_game)
+	local.start_local_game(HOST)
+	assert_eq(_got(HOST, &"on_game_start").size(), 1, "once")
+
+
+func test_only_the_host_of_a_local_room_can_start_a_game_that_way() -> void:
+	host.check_deck(HOST, Decks.official_deck().to_dict(), [])
+	host.start_local_game(HOST)
+	assert_eq(_got(HOST, &"on_game_start"), [], "an ordinary room starts when both are ready")
+
+
+func test_leaving_a_local_room_closes_it() -> void:
+	var local := _open_local_room()
+	local.seat_second_player(HOST)
+	local.leave(HOST)
+	assert_null(local.state.directory.get_room(&"room_2"))
+	assert_eq(_got(LobbyHost.SECOND_SEAT, &"on_room_closed").size(), 1, "the second player is told like any other")

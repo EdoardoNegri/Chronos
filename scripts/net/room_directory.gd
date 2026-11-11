@@ -94,9 +94,10 @@ func validate_room_name(room_name: String) -> String:
 
 ## Creates a room for two players hosted by `host_name` (or `player_name`). `custom_cards` lets its
 ## games use custom cards too (see RoomInfo), and a `password` (empty for none) is asked of whoever
-## joins. Returns null if the name or the password is not allowed.
+## joins. A `local_room` is only for its host, who takes both seats (see seat_second_player), and
+## takes any card. Returns null if the name or the password is not allowed.
 func host_room(
-	room_name: String, custom_cards := false, password := "", host_name := ""
+	room_name: String, custom_cards := false, password := "", host_name := "", local_room := false
 ) -> RoomInfo:
 	if not validate_room_name(room_name).is_empty():
 		return null
@@ -109,12 +110,24 @@ func host_room(
 		1,
 		PLAYERS,
 		false,
-		custom_cards,
+		custom_cards or local_room,
 		password
 	)
+	room.local_room = local_room
 	_rooms.append(room)
 	rooms_changed.emit()
 	return room
+
+
+## Takes the second seat of a local room, which only its host can do (nobody else can join it).
+## Returns false if the room is not a local room, or the seat is taken.
+func seat_second_player(room_id: StringName) -> bool:
+	var room := get_room(room_id)
+	if room == null or not room.local_room or room.is_full():
+		return false
+	room.players += 1
+	rooms_changed.emit()
+	return true
 
 
 ## Seats a player in a room, giving the password if the room has one. Returns OK,

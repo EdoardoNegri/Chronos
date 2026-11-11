@@ -263,3 +263,19 @@ func test_a_seat_can_be_freed_and_a_room_removed() -> void:
 func test_a_host_name_can_be_given() -> void:
 	assert_eq(_dir.host_room("Named host", false, "", "Kairos").host_name, "Kairos")
 	assert_eq(_dir.host_room("Default host").host_name, _dir.player_name)
+
+
+func test_a_local_room_is_only_for_its_host() -> void:
+	var local := _dir.host_room("Practice", false, "", "Aeon", true)
+	assert_true(local.local_room)
+	assert_true(local.custom_cards, "any card can be used in it")
+	assert_false(local.is_joinable(), "nobody can join it")
+	assert_eq(_dir.join_room(local.id), ERR_BUSY)
+	assert_false(_dir.get_rooms("", true).has(local), "it is not among the rooms that can be joined")
+
+	assert_true(_dir.seat_second_player(local.id), "the host takes the second seat")
+	assert_eq(local.players, 2)
+	assert_false(_dir.seat_second_player(local.id), "only once")
+	assert_false(_dir.seat_second_player(&"room_1"), "and not in an ordinary room")
+	assert_true(RoomInfo.from_dict(local.to_dict()).local_room, "a local room stays one when it is sent")
+	assert_false(_dir.host_room("An ordinary room").local_room)

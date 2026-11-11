@@ -23,6 +23,14 @@ const BIG_STEP := 5
 @export var min_value := 0
 @export var max_value := 999
 
+## Whether the number can be changed, by typing or by the buttons.
+var editable := true:
+	set(new_value):
+		editable = new_value
+		if _edit != null:
+			_edit.editable = editable
+		_update_buttons()
+
 var value := 0:
 	set(new_value):
 		var clamped := clampi(new_value, min_value, max_value)
@@ -60,7 +68,8 @@ func _ready() -> void:
 
 	_edit = LineEdit.new()
 	_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_edit.max_length = str(max_value).length()
+	_edit.max_length = maxi(str(max_value).length(), str(min_value).length())
+	_edit.editable = editable
 	_edit.select_all_on_focus = true
 	_edit.text = str(value)
 	var text_style := StyleBoxEmpty.new()
@@ -169,8 +178,8 @@ func _show_value() -> void:
 func _update_buttons() -> void:
 	if _minus == null:
 		return
-	_minus.disabled = value <= min_value
-	_plus.disabled = value >= max_value
+	_minus.disabled = not editable or value <= min_value
+	_plus.disabled = not editable or value >= max_value
 
 
 static func _without_margins(style: StyleBox) -> StyleBox:

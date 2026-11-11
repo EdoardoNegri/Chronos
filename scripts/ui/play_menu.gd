@@ -9,14 +9,18 @@ extends Control
 ## they change. Joining connects straight to the host's game, at the address the list gives; a
 ## room whose host cannot be reached is taken off the list. The first time the player comes here
 ## they are asked for a name (see PlayerProfile), which is all the account there is. A room can
-## have a password, which the host sets and a player joining has to type. Once a room is opened or
-## joined, the room screen takes over.
+## have a password, which the host sets and a player joining has to type. At the right of the title
+## of the Host Room window is a switch between a public room (the default) and a local one, only for
+## the player (see Lobby.host_local): with it the window only has Cancel and Create left, and the
+## room is always called Local Room. Once a room is opened or joined, the room screen takes over.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const ROOM_SCENE := "res://scenes/room.tscn"
 const STATUS_COLOR := Color(0.62, 0.64, 0.74)
 const ERROR_COLOR := Color(0.9, 0.5, 0.45)
 const SUCCESS_COLOR := Color(0.5, 0.82, 0.55)
+## What a local room is called: it is only the host's, so it is not given a name.
+const LOCAL_ROOM_NAME := "Local Room"
 ## How often the list is read again while the screen is open.
 const REFRESH_SECONDS := 30.0
 ## The first choice of each filter: no limit. The cards filter goes on with the game modes, the
@@ -58,7 +62,12 @@ var _refresh_timer: Timer
 @onready var _status: Label = %Status
 @onready var _host_overlay: Control = %HostOverlay
 @onready var _room_name_edit: LineEdit = %RoomNameEdit
+@onready var _local_toggle: ToggleSwitch = %LocalToggle
+@onready var _local_hint: Control = %LocalHint
+@onready var _name_label: Label = %NameLabel
+@onready var _password_label: Label = %PasswordLabel
 @onready var _password_edit: LineEdit = %PasswordEdit
+@onready var _mode_label: Label = %ModeLabel
 @onready var _game_mode_option: OptionButton = %GameModeOption
 @onready var _form_error: Label = %FormError
 @onready var _create_button: Button = %CreateButton
@@ -92,6 +101,7 @@ func _ready() -> void:
 	_refresh_button.pressed.connect(_refresh)
 	_host_button.pressed.connect(_open_host_dialog)
 	_create_button.pressed.connect(_create_room)
+	_local_toggle.toggled.connect(_show_local_options)
 	_cancel_button.pressed.connect(_close_overlay.bind(_host_overlay))
 	_room_name_edit.text_submitted.connect(func(_text: String) -> void: _create_room())
 	_room_name_edit.text_changed.connect(func(_text: String) -> void: _form_error.text = "")
@@ -373,6 +383,8 @@ func _open_host_dialog() -> void:
 	_room_name_edit.text = "%s's room" % profile.player_name
 	_password_edit.text = ""
 	_game_mode_option.select(0)
+	_local_toggle.set_pressed_no_signal(false)
+	_show_local_options(false)
 	_form_error.text = ""
 	_create_button.disabled = false
 	_open_overlay(_host_overlay, _room_name_edit)
@@ -380,6 +392,9 @@ func _open_host_dialog() -> void:
 
 
 func _create_room() -> void:
+	if _local_toggle.button_pressed:
+		_create_local_room()
+		return
 	var error := RoomDirectory.check_room_name(_room_name_edit.text)
 	if not error.is_empty():
 		_form_error.text = error
@@ -388,6 +403,24 @@ func _create_room() -> void:
 	# The room runs on this computer; hosted or host_failed comes back at once.
 	_create_button.disabled = true
 	online.host_here(profile.player_name, _room_name_edit.text.strip_edges(), custom_cards, _password_edit.text)
+
+
+## The switch says Public or Local. A local room has no name to choose (it is always Local Room), no
+## password and no game mode (any card can be used), so the window only has Cancel and Create left,
+## and says what a local room is.
+func _show_local_options(local: bool) -> void:
+	_local_toggle.text = "Local" if local else "Public"
+	_local_hint.visible = local
+	for control: Control in [
+		_name_label, _room_name_edit, _password_label, _password_edit, _mode_label, _game_mode_option
+	]:
+		control.visible = not local
+
+
+## Opens the local room, which is only the host's: no server, and nothing put in the room list.
+func _create_local_room() -> void:
+	_create_button.disabled = true
+	online.host_local(profile.player_name, LOCAL_ROOM_NAME)
 
 
 func _on_hosted(_room: RoomInfo) -> void:
@@ -409,7 +442,7 @@ func _go_to_room() -> void:
 
 
 ## Shows a dialog over the screen and puts the caret in `field`.
-func _open_overlay(overlay: Control, field: LineEdit) -> void:
+func _open_overlay(overlay: Control, field: Control) -> void:
 	# Block keyboard focus from wandering behind the dialog while it is up.
 	_content.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_DISABLED
 	overlay.visible = true
