@@ -27,7 +27,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/dev_terminals/plugin.cfg")
+enabled=PackedStringArray("res://addons/dev_refresh/plugin.cfg", "res://addons/dev_terminals/plugin.cfg")
 
 [physics]
 

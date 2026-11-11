@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p \"${CLAUDE_PROJECT_DIR:-.}/.godot\" && date +%s%N > \"${CLAUDE_PROJECT_DIR:-.}/.godot/claude_done\" 2>/dev/null || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

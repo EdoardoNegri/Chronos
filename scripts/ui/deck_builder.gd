@@ -1,10 +1,10 @@
 extends Control
 ## Deck builder. A toolbar across the top has the deck picker, the deck's name and Clear, Delete and
-## Save. Under it, from the left: the selected card (its picture and details), the deck as a list
-## (a row per card with its copies and − / + buttons), and the cards you can add, as pictures with a
-## search box and a Filters button. Filters opens the same search form as the database (see
-## CardSearchForm) in a panel over the left side, so the cards stay in view while you filter; the
-## box and the form apply together.
+## Save. Under it, from the left: the deck as a list (a row per card: a box with its name and + and
+## −, then its copies, then what the copies cost in points), the cards you can add, as pictures with
+## a search box and a Filters button, and the selected card (its picture and details). Filters
+## opens the same search form as the database (see CardSearchForm) in a panel over the left side, so
+## the cards stay in view while you filter; the box and the form apply together.
 ##
 ## Double-click or right-click a card in the list to add it, and the same on a row of the deck to
 ## take a copy out. Cards can also be dragged between the two.
@@ -58,7 +58,8 @@ var _open_option := NEW_DECK_INDEX
 @onready var _info: CardInfo = %Info
 @onready var _count_label: Label = %CountLabel
 @onready var _points_label: Label = %PointsLabel
-@onready var _validity_label: Label = %ValidityLabel
+@onready var _points_available_label: Label = %PointsAvailableLabel
+@onready var _deck_titles: MarginContainer = %DeckTitles
 @onready var _deck_scroll: ScrollContainer = %DeckScroll
 @onready var _deck_list: VBoxContainer = %DeckList
 @onready var _empty_deck_label: Label = %EmptyDeckLabel
@@ -86,6 +87,8 @@ func _ready() -> void:
 	_filters_form.changed.connect(_on_filters_changed)
 	_clear_filters_button.pressed.connect(_filters_form.clear)
 	_result_grid.resized.connect(_fit_results)
+	# The filters are in a panel as narrow as the deck.
+	_filters_form.compact = true
 	# The deck can use every card, so the choice starts on Both.
 	_filters_form.set_source(CardSearchForm.SOURCE_BOTH)
 	_deck_option.item_selected.connect(_on_deck_option_selected)
@@ -93,6 +96,12 @@ func _ready() -> void:
 	_save_button.pressed.connect(_save_deck)
 	_delete_button.pressed.connect(_delete_deck)
 	_clear_button.pressed.connect(_clear_deck)
+	_deck_titles.add_child(DeckRow.make_titles())
+	# The titles end where the rows do, which is earlier when the list has a scroll bar.
+	var scroll_bar := _deck_scroll.get_v_scroll_bar()
+	scroll_bar.visibility_changed.connect(_align_deck_titles)
+	scroll_bar.resized.connect(_align_deck_titles)
+	_align_deck_titles()
 	_deck_scroll.set_drag_forwarding(Callable(), _can_drop_on_deck, _drop_on_deck)
 	_result_scroll.set_drag_forwarding(Callable(), _can_drop_on_results, _drop_on_results)
 	_deck_dialog = _make_dialog(FileDialog.FILE_MODE_OPEN_FILE, DECK_FILTERS)
@@ -167,14 +176,12 @@ func _make_row(card_id: String) -> DeckRow:
 	row.setup(
 		card_id,
 		card.card_name if card != null else "Missing card",
-		str(card.time_cost) if card != null else "?",
-		CardView.TYPE_ACCENTS.get(card.card_type, CardView.DEFAULT_ACCENT) if card != null else CardView.DEFAULT_ACCENT,
 		copies,
-		copies >= DeckData.MAX_COPIES
+		points_list.points_for(card) if card != null else 0
 	)
 	row.selected.connect(_select)
-	row.added.connect(_add_card)
 	row.removed.connect(_remove_card)
+	row.copies_changed.connect(_on_row_copies_changed)
 	return row
 
 
@@ -277,28 +284,48 @@ func _refresh_deck() -> void:
 			listed[card_id] = true
 			_deck_list.add_child(_make_row(card_id))
 	_empty_deck_label.visible = _deck.size() == 0
+	_deck_titles.visible = _deck.size() > 0
+	_update_deck_numbers()
+	_apply_highlight()
 
-	var problems := _deck.problems(_cards_by_id, points_list)
+
+## The titles over the rows end where the rows do: at the padding of the list, and before the scroll
+## bar when it is there.
+func _align_deck_titles() -> void:
+	var scroll_bar := _deck_scroll.get_v_scroll_bar()
+	var padding := _deck_list.get_parent_control().get_theme_constant("margin_right")
+	_deck_titles.add_theme_constant_override("margin_right", padding + (int(scroll_bar.size.x) if scroll_bar.visible else 0))
+
+
+## The number of cards and the points used and available, after the deck changed: red when there
+## are too few cards or too many points. (The rows are left as they are.)
+func _update_deck_numbers() -> void:
 	var used := _deck.used_points(_cards_by_id, points_list)
 	var usable := _deck.usable_points()
 	_count_label.text = str(_deck.size())
-	_points_label.text = "%d / %d" % [used, usable]
+	_points_label.text = str(used)
+	_points_available_label.text = "/ %d" % usable
 	_count_label.add_theme_color_override(
 		"font_color", INK_COLOR if _deck.size() >= DeckData.MIN_SIZE else ERROR_COLOR
 	)
 	_points_label.add_theme_color_override("font_color", INK_COLOR if used <= usable else ERROR_COLOR)
-	if problems.is_empty():
-		_validity_label.text = "Legal deck"
-		_validity_label.add_theme_color_override("font_color", SUCCESS_COLOR)
-	else:
-		_validity_label.text = " · ".join(problems)
-		_validity_label.add_theme_color_override("font_color", ERROR_COLOR)
-	_validity_label.tooltip_text = "\n".join(problems)
-
 	_update_badges()
-	_apply_highlight()
 	if not _selected_id.is_empty():
 		_show_details(_selected_id)
+
+
+## + or − of a row was pressed: the deck follows. A row with no copies left goes.
+func _on_row_copies_changed(card_id: String, copies: int) -> void:
+	if copies == _deck.copies(card_id):
+		return
+	if copies <= 0:
+		_deck.counts.erase(card_id)
+		_show_status("", STATUS_COLOR)
+		_refresh_deck()
+		return
+	_deck.counts[card_id] = mini(copies, DeckData.MAX_COPIES)
+	_show_status("", STATUS_COLOR)
+	_update_deck_numbers()
 
 
 func _add_card(card_id: String) -> void:

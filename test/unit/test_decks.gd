@@ -248,6 +248,11 @@ func _texts(root: Node) -> String:
 	return " | ".join(texts)
 
 
+## The row of the deck for a card, by its place in the list.
+func _row(deck_list: Node, index: int) -> DeckRow:
+	return deck_list.get_child(index) as DeckRow
+
+
 func test_deck_builder_lists_cards_and_adds_and_removes() -> void:
 	var scene := _make_scene_with_cards(3)
 	var results: Container = scene.get_node("%ResultGrid")
@@ -259,21 +264,59 @@ func test_deck_builder_lists_cards_and_adds_and_removes() -> void:
 	scene._add_card(card_id)
 	assert_eq(deck_list.get_child_count(), 1, "one row for a card, however many copies")
 	assert_eq(scene._deck.copies(card_id), 2)
-	assert_string_contains(_texts(deck_list), "×2", "the row says how many copies")
+	assert_eq(_row(deck_list, 0).copies, 2, "the row says how many copies")
 	scene._add_card(card_id)
 	scene._add_card(card_id)
 	assert_eq(scene._deck.copies(card_id), 3, "capped at three copies")
-	assert_string_contains(_texts(deck_list), "×3")
-	assert_true(_row_button(deck_list, 0, 1).disabled, "+ is off at three copies")
+	assert_eq(_row(deck_list, 0).copies, 3)
+	assert_true(_row(deck_list, 0)._plus_button.disabled, "+ is off at three copies")
 	scene._remove_card(card_id)
 	assert_eq(scene._deck.copies(card_id), 2)
-	assert_string_contains(_texts(deck_list), "×2")
+	assert_eq(_row(deck_list, 0).copies, 2)
 	scene._remove_card(card_id)
 	scene._remove_card(card_id)
 	assert_eq(deck_list.get_child_count(), 0, "the row goes with the last copy")
 
 
-func test_deck_rows_follow_the_decks_order_and_their_buttons_add_and_remove() -> void:
+func test_a_deck_row_has_plus_and_minus_in_its_name_box_and_the_copies_and_their_cost_outside_it() -> void:
+	var scene := _make_scene_with_cards(2)
+	scene.points_list = _points({"Card 1": 4})
+	var card: CardData = scene._cards[1]
+	scene._add_card(card.id)
+	scene._add_card(card.id)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var row: DeckRow = _row(scene.get_node("%DeckList"), 0)
+	var box: Control = row._box
+	var count: Label = row._count_label
+	var total: Label = row._total_label
+
+	assert_true(box.is_ancestor_of(row._plus_button), "+ is in the box")
+	assert_true(box.is_ancestor_of(row._minus_button), "and so is −")
+	assert_lt(row._plus_button.global_position.y, row._minus_button.global_position.y, "with + over −")
+	assert_gte(row._plus_button.global_position.x, box.global_position.x + box.size.x * 0.5, "at the right end of the box")
+	var in_the_box: Array[String] = []
+	for label: Label in box.find_children("*", "Label", true, false):
+		in_the_box.append(label.text)
+	assert_eq(in_the_box, ["Card 1"] as Array[String], "only the name is in the box: no time cost, no copies")
+
+	assert_false(box.is_ancestor_of(count), "the copies are outside the box")
+	assert_eq(count.text, "2")
+	assert_gte(count.global_position.x, box.get_global_rect().end.x, "at its right")
+	assert_eq(total.text, "8", "and the total cost: 2 copies at 4 points")
+	assert_gte(total.global_position.x, count.get_global_rect().end.x - 1.0, "at the right of the copies")
+
+	row._plus_button.pressed.emit()
+	assert_eq(count.text, "3")
+	assert_eq(total.text, "12", "the total follows the number of copies")
+	assert_eq(scene._deck.copies(card.id), 3, "and the deck follows + and −")
+	assert_true(row._plus_button.disabled, "no more than three copies")
+	row._minus_button.pressed.emit()
+	assert_eq(scene._deck.copies(card.id), 2)
+	assert_eq(count.text, "2")
+
+
+func test_plus_and_minus_of_a_row_change_the_deck_and_a_row_with_no_copies_goes() -> void:
 	var scene := _make_scene_with_cards(3)
 	var deck_list: Container = scene.get_node("%DeckList")
 	# The cards cost 0, 1 and 2, so the cheapest comes first.
@@ -284,29 +327,30 @@ func test_deck_rows_follow_the_decks_order_and_their_buttons_add_and_remove() ->
 		names.append(scene._cards_by_id[row.card_id].card_name)
 	assert_eq(names, ["Card 0", "Card 1", "Card 2"] as Array[String])
 
-	var middle_id: String = (deck_list.get_child(1) as DeckRow).card_id
-	# The rows are made again after every change, so the buttons are looked up each time.
-	_row_button(deck_list, 1, 1).pressed.emit()
-	assert_eq(scene._deck.copies(middle_id), 2, "+ adds a copy")
-	_row_button(deck_list, 1, 0).pressed.emit()
-	_row_button(deck_list, 1, 0).pressed.emit()
-	assert_eq(scene._deck.copies(middle_id), 0, "− takes one out")
-	assert_eq(deck_list.get_child_count(), 2)
+	var middle: DeckRow = _row(deck_list, 1)
+	var middle_id := middle.card_id
+	middle._plus_button.pressed.emit()
+	middle._plus_button.pressed.emit()
+	assert_eq(scene._deck.copies(middle_id), 3, "+ adds copies")
+	assert_same(_row(deck_list, 1), middle, "the row stays")
+	assert_eq(scene._deck.size(), 5)
+	assert_eq((scene.get_node("%CountLabel") as Label).text, "5", "and the count follows")
 
-	var first_id: String = (deck_list.get_child(0) as DeckRow).card_id
+	for i in 3:
+		middle._minus_button.pressed.emit()
+	assert_eq(scene._deck.copies(middle_id), 0, "− takes them out")
+	assert_eq(deck_list.get_child_count(), 2, "and the row goes with the last one")
+
+	var first: DeckRow = _row(deck_list, 0)
+	var first_id := first.card_id
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_RIGHT
 	click.pressed = true
-	(deck_list.get_child(0) as DeckRow)._gui_input(click)
-	assert_eq(scene._deck.copies(first_id), 0, "a right click takes a copy out too")
+	first._on_box_input(click)
+	assert_eq(scene._deck.copies(first_id), 0, "a right click on the box takes a copy out")
 
 
-## The − (0) or + (1) button of a row of the deck.
-func _row_button(deck_list: Node, row_index: int, which: int) -> Button:
-	return deck_list.get_child(row_index).find_children("*", "Button", true, false)[which]
-
-
-func test_the_deck_counts_cards_and_points_and_says_what_is_missing() -> void:
+func test_the_deck_counts_cards_and_points_with_no_line_about_what_it_needs() -> void:
 	var scene := _make_scene_with_cards(2)
 	var hint: Label = scene.get_node("%EmptyDeckLabel")
 	assert_true(hint.visible, "an empty deck says how to fill it")
@@ -314,8 +358,32 @@ func test_the_deck_counts_cards_and_points_and_says_what_is_missing() -> void:
 	scene._add_card(scene._cards[0].id)
 	assert_false(hint.visible)
 	assert_eq((scene.get_node("%CountLabel") as Label).text, "1")
-	assert_eq((scene.get_node("%PointsLabel") as Label).text, "0 / 100")
-	assert_string_contains((scene.get_node("%ValidityLabel") as Label).text, "Needs 49 more cards")
+	assert_eq((scene.get_node("%PointsLabel") as Label).text, "0", "the points the deck uses")
+	assert_eq((scene.get_node("%PointsAvailableLabel") as Label).text, "/ 100", "and the points there are")
+	assert_null(scene.get_node_or_null("%ValidityLabel"), "there is no line about what the deck needs")
+	assert_false(_texts(scene).contains("Needs"))
+	assert_false(_texts(scene).contains("Legal deck"))
+
+
+func test_the_points_there_are_are_outside_the_points_box() -> void:
+	var scene := _make_scene_with_cards(1)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var box: Control = scene.get_node("%PointsLabel").get_parent()
+	var available: Control = scene.get_node("%PointsAvailableLabel")
+	assert_false(box.is_ancestor_of(available), "not in the box")
+	assert_gte(available.global_position.x, box.get_global_rect().end.x, "but at its right")
+
+
+func test_the_card_info_is_at_the_right_of_the_deck_and_the_cards() -> void:
+	var scene := _make_scene_with_cards(1)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var deck: Control = scene.get_node("%DeckList").get_parent().get_parent().get_parent().get_parent().get_parent()
+	var cards: Control = scene.get_node("%SearchPanel")
+	var info: Control = (scene.get_node("%Info") as Control).get_parent().get_parent().get_parent().get_parent()
+	assert_lt(deck.global_position.x, cards.global_position.x, "the deck is on the left")
+	assert_gte(info.global_position.x, cards.get_global_rect().end.x, "and the card info after the cards, on the right")
 
 
 func test_selecting_a_card_shows_its_picture_and_details() -> void:
@@ -608,3 +676,95 @@ func test_card_png_carries_the_card_and_imports() -> void:
 	file.store_buffer(plain)
 	file.close()
 	assert_null(library.import_png(path), "a plain PNG is refused")
+
+
+func test_the_list_has_titles_over_card_copies_and_points_lined_up_with_the_rows() -> void:
+	var scene := _make_scene_with_cards(20)
+	var titles_box: Control = scene.get_node("%DeckTitles")
+	assert_false(titles_box.visible, "no rows, no titles")
+	scene._add_card(scene._cards[0].id)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_true(titles_box.is_visible_in_tree())
+	var labels: Array[Node] = titles_box.find_children("*", "Label", true, false)
+	var titles: Array[String] = []
+	for label: Label in labels:
+		titles.append(label.text)
+	assert_eq(titles, ["Card", "Copies", "Points"] as Array[String])
+
+	var deck_list: Container = scene.get_node("%DeckList")
+	var row := _row(deck_list, 0)
+	assert_lte(titles_box.get_global_rect().end.y, row.global_position.y + 1.0, "over the rows")
+	assert_almost_eq(
+		(labels[1] as Control).get_global_rect().get_center().x, row._count_label.get_global_rect().get_center().x, 1.0, "Copies is over the copies"
+	)
+	assert_almost_eq(
+		(labels[2] as Control).get_global_rect().get_center().x, row._total_label.get_global_rect().get_center().x, 1.0, "Points over the points"
+	)
+
+	# With many rows the list has a scroll bar: the titles still line up with the rows.
+	for card: CardData in scene._cards:
+		scene._add_card(card.id)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_true((scene.get_node("%DeckScroll") as ScrollContainer).get_v_scroll_bar().visible, "the list scrolls")
+	var first := _row(deck_list, 0)
+	assert_almost_eq(
+		(labels[2] as Control).get_global_rect().get_center().x, first._total_label.get_global_rect().get_center().x, 1.0, "still over the points"
+	)
+
+
+func test_the_line_before_plus_and_minus_is_attached_to_the_box_and_the_buttons_reach_its_edge() -> void:
+	var scene := _make_scene_with_cards(1)
+	scene._add_card(scene._cards[0].id)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var row := _row(scene.get_node("%DeckList"), 0)
+	var box: Control = row._box
+	var line: Control = row._divider
+	assert_almost_eq(line.global_position.y, box.global_position.y + 1.0, 0.5, "the line starts at the top border of the box")
+	assert_almost_eq(line.get_global_rect().end.y, box.get_global_rect().end.y - 1.0, 0.5, "and runs to the bottom border")
+	assert_almost_eq(
+		row._plus_button.global_position.x, line.get_global_rect().end.x, 0.5, "with + and − right against it, no space between"
+	)
+	assert_almost_eq(row._minus_button.global_position.x, row._plus_button.global_position.x, 0.5, "in one column")
+	assert_almost_eq(
+		row._plus_button.get_global_rect().end.x, box.get_global_rect().end.x, 1.5, "+ and − reach the right edge of the box"
+	)
+	assert_almost_eq(row._plus_button.global_position.y, box.global_position.y + 1.0, 1.5, "+ is at the top")
+	assert_almost_eq(row._minus_button.get_global_rect().end.y, box.get_global_rect().end.y, 1.5, "and − at the bottom")
+
+
+func test_the_box_and_the_two_numbers_are_the_same_distance_apart() -> void:
+	var scene := _make_scene_with_cards(1)
+	scene._add_card(scene._cards[0].id)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var row := _row(scene.get_node("%DeckList"), 0)
+	var between_box_and_copies: float = row._count_label.global_position.x - row._box.get_global_rect().end.x
+	var between_copies_and_points: float = row._total_label.global_position.x - row._count_label.get_global_rect().end.x
+	assert_almost_eq(between_box_and_copies, between_copies_and_points, 1.0, "the same space on both sides of the copies")
+	assert_almost_eq(between_box_and_copies, float(DeckRow.GAP), 1.0)
+	assert_almost_eq(row._count_label.size.x, row._total_label.size.x, 0.5, "and the two numbers have columns of the same width")
+
+
+func test_a_deck_row_has_no_stripe_and_its_name_and_the_title_over_it_start_at_the_left() -> void:
+	var scene := _make_scene_with_cards(1)
+	scene._add_card(scene._cards[0].id)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var row := _row(scene.get_node("%DeckList"), 0)
+	var box: Control = row._box
+	for rect: ColorRect in box.find_children("*", "ColorRect", true, false):
+		assert_lte(rect.custom_minimum_size.x, 1.0, "nothing at the left of the name but its margin: only thin lines are left")
+	var name_label: Label = row._name_label
+	assert_eq(name_label.horizontal_alignment, HORIZONTAL_ALIGNMENT_LEFT)
+	assert_almost_eq(name_label.global_position.x - box.global_position.x, DeckRow.NAME_INDENT, 1.0, "the name starts at the left of the box")
+
+	var title: Label = (scene.get_node("%DeckTitles") as Control).find_children("*", "Label", true, false)[0]
+	assert_eq(title.text, "Card")
+	assert_eq(title.horizontal_alignment, HORIZONTAL_ALIGNMENT_LEFT)
+	assert_almost_eq(
+		title.global_position.x + DeckRow.NAME_INDENT, name_label.global_position.x, 1.0, "and the title starts where the names do"
+	)
