@@ -43,10 +43,16 @@ static func send_cards(deck: DeckData, cards: Dictionary, official: Dictionary) 
 ## sent for them.
 static func check_sent(deck_data: Dictionary, sent_cards: Array, custom_allowed: bool, official_cards: Dictionary, points_list: PointsList) -> Array[String]:
 	var deck := DeckData.from_dict(deck_data)
+	return problems(deck, sent_pool(sent_cards, official_cards), points_list, custom_allowed, official_cards)
+
+
+## The cards a sent deck may use (id -> CardData): the host's official cards, plus the custom cards
+## that were sent (see send_cards). Official cards are always the host's own.
+static func sent_pool(sent_cards: Array, official_cards: Dictionary) -> Dictionary:
 	var cards := official_cards.duplicate()
 	for data: Variant in sent_cards.slice(0, MAX_SENT_CARDS):
 		if data is Dictionary:
 			var card := CardData.from_dict(data)
 			if not card.id.is_empty() and not cards.has(card.id):
 				cards[card.id] = card
-	return problems(deck, cards, points_list, custom_allowed, official_cards)
+	return cards

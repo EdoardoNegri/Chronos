@@ -5,19 +5,21 @@ extends Control
 ##
 ## Each player chooses one of their decks that can be played in this room (see DeckCheck), by
 ## typing to search them. The host's game checks the deck again, and only then can the player press
-## Ready, at the right of the title; their box turns green for both players to see. When both are ready, the game starts. (The
-## game itself will take place here.)
+## Ready, at the right of the title; their box turns green for both players to see. When both are
+## ready, the game starts and both go to the board (see board.gd).
 ##
 ## The back arrow (or Escape) leaves the room and goes back to the room list; if the host leaves,
 ## the room closes and leaves the list.
 ##
 ## A local room (see RoomInfo) is the player's alone, so it has no chat, no names of players and no
-## Ready: just the title with a Start button at its right, and a deck field for each player. Any deck
-## can be chosen, a deck that is not finished too. With one deck chosen the player controls one
-## player; with two they control both. Below the decks are the options: values of the rules to try
+## Ready: just the title with a Start button at its right, and a deck field for each player; the
+## second player's field appears once the first player has a deck. Any deck can be chosen, a deck
+## that is not finished too. With one deck chosen the player controls one player; with two they
+## control both. Below the decks are the options: values of the rules to try
 ## out (see GameOptions), such as the cards in the opening hand. Start starts the game.
 
 const PLAY_SCENE := "res://scenes/play.tscn"
+const BOARD_SCENE := "res://scenes/board.tscn"
 const GOLD := "f2cc73"
 const MUTED := "9ea3bd"
 ## Messages from the game itself are written by "Console", in this colour.
@@ -238,6 +240,8 @@ func _on_ready_changed() -> void:
 func _on_game_started() -> void:
 	_console("Both players are ready. The game starts!")
 	_show_ready()
+	if change_scenes:
+		get_tree().change_scene_to_file(BOARD_SCENE)
 
 
 ## The Ready button, the deck field and the green boxes, as things stand.
@@ -275,15 +279,15 @@ func _say_listing() -> void:
 # --- A local room --------------------------------------------------------------------------
 
 
-## What a local room shows: the title with its Start button, and a deck field for each player. No
-## chat, no names of players, no Ready.
+## What a local room shows: the title with its Start button, and a deck field for each player (the
+## second one once the first player has a deck, see _show_start). No chat, no names of players, no
+## Ready.
 func _setup_local_room() -> void:
 	_info_label.visible = false
 	_players_row.visible = false
 	_chat_panel.visible = false
 	_ready_button.visible = false
 	_start_button.visible = true
-	_second_row.visible = true
 	_options_panel.visible = true
 	_setup_options()
 	_deck_edit.placeholder_text = "Player 1's deck: type to search"
@@ -356,8 +360,10 @@ func _on_second_deck_checked(_problems: Array) -> void:
 
 
 ## The Start button and the deck fields of a local room, as things stand: Start can be pressed once
-## the first player has a deck (and the second, if they have one), until the game has started.
+## the first player has a deck (and the second, if they have one), until the game has started. The
+## second player's deck field shows once the first player has a deck (or while the second has one).
 func _show_start() -> void:
+	_second_row.visible = not _chosen.is_empty() or not _chosen_second.is_empty()
 	var first_has_deck := online.deck_approved and not _chosen.is_empty()
 	var second_is_fine := _chosen_second.is_empty() or online.second_approved
 	_start_button.disabled = online.game_on or not (first_has_deck and second_is_fine)

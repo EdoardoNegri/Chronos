@@ -318,7 +318,24 @@ func test_a_local_room_has_a_title_with_a_start_button_at_its_right_and_a_deck_f
 	assert_lt(start.get_global_rect().get_center().y, title.get_global_rect().end.y)
 	assert_true(start.disabled, "no deck yet")
 	assert_true((scene.get_node("%DeckEdit") as Control).is_visible_in_tree())
-	assert_true((scene.get_node("%SecondDeckEdit") as Control).is_visible_in_tree())
+	assert_false((scene.get_node("%SecondDeckEdit") as Control).is_visible_in_tree(), "not until there is a first deck")
+
+
+func test_the_second_players_deck_field_appears_once_the_first_player_has_a_deck() -> void:
+	var scene := _make_local_scene()
+	var second: Control = scene.get_node("%SecondDeckRow")
+	assert_false(second.visible)
+	_choose(scene, "%DeckEdit", "Official deck")
+	assert_true(second.visible, "now the opponent's deck can be added")
+	var first: LineEdit = scene.get_node("%DeckEdit")
+	first.text = "Offic"
+	first.text_changed.emit(first.text)
+	assert_false(second.visible, "and it goes again with the first deck")
+	_choose(scene, "%DeckEdit", "Official deck")
+	_choose(scene, "%SecondDeckEdit", "Small deck")
+	first.text = "Offic"
+	first.text_changed.emit(first.text)
+	assert_true(second.visible, "unless a second deck was chosen already")
 
 
 func test_a_local_room_has_no_chat_no_names_of_players_no_ready_and_no_note_about_the_computer() -> void:
@@ -374,10 +391,11 @@ func test_with_one_deck_the_player_controls_one_player_and_with_two_both() -> vo
 func test_start_needs_a_deck_for_the_first_player_and_then_starts_the_game_and_locks_the_decks() -> void:
 	var scene := _make_local_scene()
 	var start: Button = scene.get_node("%StartButton")
-	_choose(scene, "%SecondDeckEdit", "Official deck")
-	assert_true(start.disabled, "a deck only for the second player is not enough")
+	assert_true(start.disabled, "no deck yet")
 	_choose(scene, "%DeckEdit", "Small deck")
 	assert_false(start.disabled)
+	_choose(scene, "%SecondDeckEdit", "Official deck")
+	assert_false(start.disabled, "with a deck for each")
 
 	start.pressed.emit()
 	assert_true(scene.online.game_on, "Start starts the game")

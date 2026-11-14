@@ -372,6 +372,31 @@ func test_a_local_game_can_be_started_with_one_player() -> void:
 	lobby.stop_hosting()
 
 
+func test_in_a_local_game_the_host_plays_both_players_with_the_options_of_the_room() -> void:
+	var lobby := _hosting_lobby()
+	lobby.host_local("Aeon", "Local Room")
+	lobby.game_options.hand_size = 3
+	lobby.game_options.forced_draw_cost = 25
+	lobby.game_options.starter = GameOptions.Starter.PLAYER_2
+	lobby.check_deck(_official_deck_data(), [])
+	lobby.control_both_players(true)
+	lobby.check_deck(_official_deck_data(), [], LobbyHost.SECOND_SEAT)
+	lobby.start_local_game()
+	assert_eq((lobby.game_view["hand"] as Array).size(), 3, "the opening hand the room chose")
+	assert_false(lobby.game_view["your_turn"])
+	assert_true(lobby.second_game_view["your_turn"], "Player 2 starts, as the room chose")
+
+	lobby.draw_card()
+	assert_eq(lobby.game_view["time_ahead"], 0, "Player 1 cannot draw on Player 2's turn")
+	lobby.draw_card(LobbyHost.SECOND_SEAT)
+	assert_eq(lobby.second_game_view["time_ahead"], 25, "Player 2 paid the forced draw")
+	assert_eq((lobby.second_game_view["hand"] as Array).size(), 4)
+	assert_true(lobby.game_view["your_turn"], "now Player 1 acts")
+	lobby.leave_room()
+	assert_true(lobby.game_view.is_empty(), "leaving forgets the game")
+	lobby.stop_hosting()
+
+
 func test_only_a_local_room_has_a_second_player_to_control_or_a_game_to_start() -> void:
 	var lobby := _hosting_lobby()
 	lobby.host_here("Aeon", "Duel", false, "")

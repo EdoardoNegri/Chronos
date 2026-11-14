@@ -4,6 +4,10 @@ extends RefCounted
 ## joining with the password, checking each player's deck, who is ready, starting the game, and
 ## passing chat between the two players.
 ##
+## Once the game starts, the host keeps it (a GameState per room, dealt from the decks that passed
+## the check). Players ask for actions (draw, play) and each of them is sent on_game_view: what they may
+## see of the game, from their side.
+##
 ## It keeps what it knows in a LobbyState and answers through `send`, so it holds no sockets: the
 ## Lobby node passes it what players ask for and delivers its answers (over the network, or
 ## straight back to the host's own game).
@@ -20,6 +24,13 @@ var state := LobbyState.new()
 ## otherwise they are read from the game the first time a deck is checked.
 var official_cards: Dictionary = {}
 var points_list: PointsList
+## The values of the rules a game is played with (a local room's host may change them).
+var game_options := GameOptions.new()
+## Shuffles the decks and tosses the coin. Tests seed it.
+var rng := RandomNumberGenerator.new()
+
+## Room id -> the game being played in it.
+var _games: Dictionary[StringName, GameState] = {}
 
 ## Delivers a message to a player: (peer: int, method: StringName, args: Array).
 var _send: Callable
@@ -85,16 +96,17 @@ func start_local_game(peer: int) -> void:
 			_send.call(peer, &"on_deck_checked", [["Choose a deck first."]])
 			return
 	local.in_game = true
-	for player in state.players_in(room_id):
-		_send.call(player, &"on_game_start", [])
+	_start_game(room_id)
 
 
 func leave(peer: int) -> void:
+	_end_game(state.room_of(peer))
 	_tell_other_player(state.leave(peer))
 
 
 ## A player's connection went: they leave their room.
 func disconnected(peer: int) -> void:
+	_end_game(state.room_of(peer))
 	_tell_other_player(state.unregister(peer))
 
 
@@ -104,18 +116,25 @@ func check_deck(peer: int, deck_data: Dictionary, sent_cards: Array) -> void:
 	var checked_room := state.directory.get_room(room_id)
 	if checked_room == null:
 		return
-	if checked_room.local_room:
-		# Anything goes in a local room, a deck that is not finished too.
-		state.set_deck_ok(peer, true)
-		_send.call(peer, &"on_deck_checked", [[]])
-		return
 	if official_cards.is_empty():
 		official_cards = CardLibrary.new(CardLibrary.OFFICIAL_DIRECTORY).load_by_id(false)
 	if points_list == null:
 		points_list = PointsList.new()
-	var found := DeckCheck.check_sent(deck_data, sent_cards, checked_room.custom_cards, official_cards, points_list)
+	var deck := DeckData.from_dict(deck_data)
+	var pool := DeckCheck.sent_pool(sent_cards, official_cards)
+	var spare_points := deck.usable_points() - deck.used_points(pool, points_list)
+	var deck_cards := {}
+	for card_id in deck.counts:
+		if pool.has(card_id):
+			deck_cards[card_id] = pool[card_id]
+	if checked_room.local_room:
+		# Anything goes in a local room, a deck that is not finished too.
+		state.set_deck_ok(peer, true, deck, spare_points, deck_cards)
+		_send.call(peer, &"on_deck_checked", [[]])
+		return
+	var found := DeckCheck.problems(deck, pool, points_list, checked_room.custom_cards, official_cards)
 	var was_ready := state.is_ready(peer)
-	state.set_deck_ok(peer, found.is_empty())
+	state.set_deck_ok(peer, found.is_empty(), deck, spare_points, deck_cards)
 	_send.call(peer, &"on_deck_checked", [found])
 	if was_ready != state.is_ready(peer):
 		_send_ready_states(room_id)
@@ -134,8 +153,34 @@ func set_ready(peer: int, is_ready: bool) -> void:
 	_send_ready_states(room_id)
 	if state.both_ready(room_id):
 		ready_room.in_game = true
-		for player in state.players_in(room_id):
-			_send.call(player, &"on_game_start", [])
+		_start_game(room_id)
+
+
+## A player pays time to draw a card (rule 3.4), if it is their turn. Everyone in the room is sent
+## the game as it now is.
+func draw(peer: int) -> void:
+	var room_id := state.room_of(peer)
+	var game: GameState = _games.get(room_id)
+	if game == null:
+		return
+	game.forced_draw(_seat_of(peer))
+	_send_game_views(room_id)
+
+
+## A player plays a card from their hand onto their field, for its time cost (rule 3.2), if it is
+## their turn. Everyone in the room is sent the game as it now is.
+func play(peer: int, card_id: String) -> void:
+	var room_id := state.room_of(peer)
+	var game: GameState = _games.get(room_id)
+	if game == null:
+		return
+	game.play_card(_seat_of(peer), card_id)
+	_send_game_views(room_id)
+
+
+## The game being played in a room, or null.
+func game_in(room_id: StringName) -> GameState:
+	return _games.get(room_id)
 
 
 ## Passes a chat line to the other player in the room. (Whatever the game sends between the two
@@ -145,6 +190,47 @@ func chat(peer: int, text: String) -> void:
 	var clean := text.strip_edges().left(MAX_CHAT_LENGTH)
 	if other != 0 and not clean.is_empty():
 		_send.call(other, &"on_chat", [state.name_of(peer), clean])
+
+
+## Deals the game of a room from the decks its players chose, and tells everyone in it that it
+## started and what they see of it. With one player (a local room), the second seat is empty.
+func _start_game(room_id: StringName) -> void:
+	var players := state.players_in(room_id)
+	var decks: Array[Array] = [[], []]
+	var spare: Array[int] = [0, 0]
+	var pools: Array[Dictionary] = [{}, {}]
+	for seat in players.size():
+		var deck := state.deck_of(players[seat])
+		decks[seat] = GameState.card_ids(deck) if deck != null else []
+		spare[seat] = state.spare_points_of(players[seat])
+		pools[seat] = state.deck_cards_of(players[seat])
+	var first: Array[String] = []
+	first.assign(decks[0])
+	var second: Array[String] = []
+	second.assign(decks[1])
+	var starter := GameState.pick_starter(game_options, spare, rng)
+	_games[room_id] = GameState.create(first, second, game_options, starter, rng, players.size() > 1, pools)
+	for player in players:
+		_send.call(player, &"on_game_start", [])
+	_send_game_views(room_id)
+
+
+## Sends each player in a room what they see of its game.
+func _send_game_views(room_id: StringName) -> void:
+	var game: GameState = _games.get(room_id)
+	if game == null:
+		return
+	for player in state.players_in(room_id):
+		_send.call(player, &"on_game_view", [game.view_for(_seat_of(player))])
+
+
+## A player's seat in their room's game: 0 for the host, 1 for the second player.
+func _seat_of(peer: int) -> int:
+	return maxi(0, state.players_in(state.room_of(peer)).find(peer))
+
+
+func _end_game(room_id: StringName) -> void:
+	_games.erase(room_id)
 
 
 ## After someone left a room (see LobbyState.leave): tells the other player.

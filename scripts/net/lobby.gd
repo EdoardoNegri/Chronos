@@ -39,6 +39,9 @@ signal second_deck_checked(problems: Array)
 signal ready_changed
 ## Both players in my room are ready: the game starts.
 signal game_started
+## The host sent what I see of the game (game_view), or of the second player's in my local room
+## (second_game_view).
+signal game_view_changed
 ## Where the room I am hosting stands in the room list changed (see listing_note).
 signal listing_changed
 
@@ -84,6 +87,12 @@ var board: RoomBoard
 ## The values of the rules the game of my room is played with. The rulebook's, unless my local room
 ## changes them (see GameOptions).
 var game_options := GameOptions.new()
+## What I see of the game in my room, as GameState.view_for gives it (empty until it starts).
+var game_view: Dictionary = {}
+## In my local room, while I control both players: what the second player sees.
+var second_game_view: Dictionary = {}
+## Whether I control the second player of my local room as well.
+var controls_both := false
 
 ## Whether this game hosts the room it is in, and the port its server listens on.
 var is_player := false
@@ -211,6 +220,7 @@ func host_local(who: String, room_name: String) -> void:
 ## is game_started.
 func start_local_game() -> void:
 	if _host != null and is_local_room():
+		_host.game_options = game_options
 		_host.start_local_game(SERVER_ID)
 
 
@@ -225,6 +235,7 @@ func is_local_room() -> bool:
 func control_both_players(both: bool) -> void:
 	if _host == null or not is_local_room():
 		return
+	controls_both = both
 	if both:
 		_host.seat_second_player(SERVER_ID)
 	else:
@@ -279,13 +290,17 @@ func _deliver(peer: int, method: StringName, args: Array) -> void:
 		callv("rpc_id", [peer, method] + args)
 
 
-## What the rules tell the second player of a local room, who is played from this game: only the
-## check of their deck matters (the host sees whether they are ready as the other player's state).
+## What the rules tell the second player of a local room, who is played from this game: the check
+## of their deck and what they see of the game (the host sees whether they are ready as the other
+## player's state).
 func _tell_second_player(method: StringName, args: Array) -> void:
 	if method == &"on_deck_checked":
 		var problems: Array = args[0]
 		second_approved = problems.is_empty()
 		second_deck_checked.emit(problems)
+	elif method == &"on_game_view":
+		second_game_view = args[0]
+		game_view_changed.emit()
 
 
 ## Passes what a player asked for over the network to the host's rules.
@@ -495,6 +510,22 @@ func set_ready(is_ready: bool, seat := SERVER_ID) -> void:
 		_ask(&"set_ready", &"request_set_ready", [is_ready], seat)
 
 
+## In the game in my room: pays time to draw a card (rule 3.4). The host only lets the player who
+## acts do it. The answer is game_view_changed. In a local room `seat` can be
+## LobbyHost.SECOND_SEAT, for the second player.
+func draw_card(seat := SERVER_ID) -> void:
+	if room != null and game_on:
+		_ask(&"draw", &"request_draw", [], seat)
+
+
+## In the game in my room: plays a card from my hand onto my field for its time cost (rule 3.2).
+## The host only lets the player who acts do it. The answer is game_view_changed. `seat` as for
+## draw_card.
+func play_card(card_id: String, seat := SERVER_ID) -> void:
+	if room != null and game_on:
+		_ask(&"play", &"request_play", [card_id], seat)
+
+
 ## Says something to the other player in my room.
 func send_chat(text: String) -> void:
 	if room != null:
@@ -520,6 +551,9 @@ func _clear_room() -> void:
 	opponent_ready = false
 	game_on = false
 	game_options = GameOptions.new()
+	game_view = {}
+	second_game_view = {}
+	controls_both = false
 
 
 func _fail(message: String) -> void:
@@ -568,6 +602,16 @@ func request_deck_check(deck_data: Dictionary, sent_cards: Array) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func request_set_ready(is_ready: bool) -> void:
 	_from_player(&"set_ready", [is_ready])
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_draw() -> void:
+	_from_player(&"draw", [])
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_play(card_id: String) -> void:
+	_from_player(&"play", [card_id])
 
 
 @rpc("any_peer", "call_remote", "unreliable")
@@ -640,6 +684,12 @@ func on_ready_state(mine: bool, theirs: bool) -> void:
 func on_game_start() -> void:
 	game_on = true
 	game_started.emit()
+
+
+@rpc("authority", "call_remote", "reliable")
+func on_game_view(view: Dictionary) -> void:
+	game_view = view
+	game_view_changed.emit()
 
 
 @rpc("authority", "call_remote", "reliable")

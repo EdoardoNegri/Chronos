@@ -19,6 +19,11 @@ var _room_of: Dictionary[int, StringName] = {}
 ## Peer ids of the players whose deck passed the check, and of those who are ready.
 var _deck_ok: Dictionary[int, bool] = {}
 var _ready: Dictionary[int, bool] = {}
+## Peer id -> the deck that passed the check, its cards (card id -> CardData), and the points it
+## leaves unspent (for rule 2.1).
+var _decks: Dictionary[int, DeckData] = {}
+var _deck_cards: Dictionary[int, Dictionary] = {}
+var _spare_points: Dictionary[int, int] = {}
 
 
 ## Remembers who a connected player is. Returns an error message, or an empty string.
@@ -103,6 +108,9 @@ func leave(peer: int) -> Dictionary:
 	var room_id := _room_of[peer]
 	_room_of.erase(peer)
 	_deck_ok.erase(peer)
+	_decks.erase(peer)
+	_deck_cards.erase(peer)
+	_spare_points.erase(peer)
 	_ready.erase(peer)
 	if _host_of.get(room_id, 0) == peer:
 		var guest: int = _guest_of.get(room_id, 0)
@@ -149,14 +157,37 @@ func players_in(room_id: StringName) -> Array[int]:
 	return players
 
 
-## Records whether the deck this player chose passed the check. A deck that did not pass also
-## takes back their being ready.
-func set_deck_ok(peer: int, ok: bool) -> void:
+## Records whether the deck this player chose passed the check, and the deck itself with its cards
+## (card id -> CardData) and the points it leaves unspent, which the game is played with. A deck
+## that did not pass also takes back their being ready.
+func set_deck_ok(peer: int, ok: bool, deck: DeckData = null, spare_points := 0, deck_cards := {}) -> void:
 	if ok:
 		_deck_ok[peer] = true
+		if deck != null:
+			_decks[peer] = deck
+		_deck_cards[peer] = deck_cards
+		_spare_points[peer] = spare_points
 	else:
 		_deck_ok.erase(peer)
+		_decks.erase(peer)
+		_deck_cards.erase(peer)
+		_spare_points.erase(peer)
 		_ready.erase(peer)
+
+
+## The cards of the deck this player's check passed (card id -> CardData).
+func deck_cards_of(peer: int) -> Dictionary:
+	return _deck_cards.get(peer, {})
+
+
+## The deck this player's check passed, or null.
+func deck_of(peer: int) -> DeckData:
+	return _decks.get(peer)
+
+
+## The points the deck this player's check passed leaves unspent.
+func spare_points_of(peer: int) -> int:
+	return _spare_points.get(peer, 0)
 
 
 func deck_ok(peer: int) -> bool:

@@ -186,3 +186,67 @@ func test_leaving_a_local_room_closes_it() -> void:
 	local.leave(HOST)
 	assert_null(local.state.directory.get_room(&"room_2"))
 	assert_eq(_got(LobbyHost.SECOND_SEAT, &"on_room_closed").size(), 1, "the second player is told like any other")
+
+
+func _start_duel() -> void:
+	_join_guest()
+	var deck := Decks.official_deck().to_dict()
+	host.check_deck(HOST, deck, [])
+	host.check_deck(GUEST, deck, [])
+	host.game_options.starter = GameOptions.Starter.PLAYER_1
+	host.set_ready(HOST, true)
+	host.set_ready(GUEST, true)
+
+
+func test_once_the_game_starts_each_player_sees_their_own_hand() -> void:
+	_start_duel()
+	var host_view: Dictionary = _got(HOST, &"on_game_view").back()[2][0]
+	var guest_view: Dictionary = _got(GUEST, &"on_game_view").back()[2][0]
+	assert_eq(host_view["seat"], 0)
+	assert_eq(guest_view["seat"], 1)
+	assert_eq((host_view["hand"] as Array).size(), GameOptions.DEFAULT_HAND_SIZE)
+	assert_eq(host_view["deck_count"], 54 - GameOptions.DEFAULT_HAND_SIZE)
+	assert_true(host_view["your_turn"], "Player 1 starts, as the options say")
+	assert_false(guest_view["your_turn"])
+
+
+func test_only_the_player_who_acts_can_draw() -> void:
+	_start_duel()
+	var views := _got(GUEST, &"on_game_view").size()
+	host.draw(GUEST)
+	assert_eq(host.game_in(_room_id()).timer, 0, "not the guest's turn: nothing happens")
+	host.draw(HOST)
+	var host_view: Dictionary = _got(HOST, &"on_game_view").back()[2][0]
+	var guest_view: Dictionary = _got(GUEST, &"on_game_view").back()[2][0]
+	assert_gt(_got(GUEST, &"on_game_view").size(), views, "both are sent the game again")
+	assert_eq(host_view["time_ahead"], GameOptions.DEFAULT_FORCED_DRAW_COST, "the host paid the time")
+	assert_eq((host_view["hand"] as Array).size(), GameOptions.DEFAULT_HAND_SIZE + 1)
+	assert_eq(guest_view["time_ahead"], -GameOptions.DEFAULT_FORCED_DRAW_COST)
+	assert_true(guest_view["your_turn"], "now the guest acts")
+	assert_eq(guest_view["opponent_hand_count"], GameOptions.DEFAULT_HAND_SIZE + 1)
+
+
+func test_the_game_ends_when_a_player_leaves() -> void:
+	_start_duel()
+	host.leave(GUEST)
+	assert_null(host.game_in(_room_id()))
+
+
+func test_playing_a_card_spends_its_time_and_both_see_it_on_the_field() -> void:
+	_start_duel()
+	var official := CardLibrary.new(CardLibrary.OFFICIAL_DIRECTORY).load_by_id(false)
+	var host_view: Dictionary = _got(HOST, &"on_game_view").back()[2][0]
+	var card_id: String = host_view["hand"][0]
+	var card: CardData = official[card_id]
+	host.play(GUEST, card_id)
+	assert_eq(host.game_in(_room_id()).timer, 0, "not the guest's turn: nothing happens")
+	host.play(HOST, card_id)
+	host_view = _got(HOST, &"on_game_view").back()[2][0]
+	var guest_view: Dictionary = _got(GUEST, &"on_game_view").back()[2][0]
+	assert_eq(host_view["time_ahead"], card.time_cost, "the host paid the card's time")
+	assert_eq((host_view["hand"] as Array).size(), GameOptions.DEFAULT_HAND_SIZE - 1)
+	var out_of_hand: Array = host_view["grave"] if card.card_type == "Spell" else host_view["field"]
+	assert_eq(out_of_hand[0], card_id)
+	var seen: Array = guest_view["opponent_grave"] if card.card_type == "Spell" else guest_view["opponent_field"]
+	assert_eq(seen[0], card_id, "the guest sees it too")
+	assert_eq(guest_view["card_names"][card_id], card.card_name)
