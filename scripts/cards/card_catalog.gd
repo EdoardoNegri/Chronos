@@ -9,6 +9,8 @@ var custom: CardLibrary
 
 var _custom_ids: Dictionary[String, bool] = {}
 var _official_ids: Dictionary[String, bool] = {}
+## The pictures shown so far (id -> texture, or null for a card without one).
+var _textures: Dictionary[String, Texture2D] = {}
 
 
 func _init(official_library: CardLibrary, custom_library: CardLibrary) -> void:
@@ -19,6 +21,7 @@ func _init(official_library: CardLibrary, custom_library: CardLibrary) -> void:
 ## All the cards, sorted by name. Pass `with_art` = false to skip loading the pictures.
 func load_cards(with_art := true) -> Array[CardData]:
 	var cards := official.load_cards(with_art)
+	_textures.clear()
 	_official_ids.clear()
 	for card in cards:
 		_official_ids[card.id] = true
@@ -62,3 +65,14 @@ func has_custom() -> bool:
 ## The rendered card, from whichever library it belongs to, or null if it has none.
 func load_face(card_id: String) -> Image:
 	return (custom if is_custom(card_id) else official).load_face(card_id)
+
+
+## The rendered card as a texture to show, or null if it has none. Each picture is read the first
+## time it is shown and kept, so opening a library of any size is quick.
+func face_texture(card_id: String) -> Texture2D:
+	if not _textures.has(card_id):
+		var face := load_face(card_id)
+		if face != null:
+			face.generate_mipmaps()
+		_textures[card_id] = ImageTexture.create_from_image(face) if face != null else null
+	return _textures[card_id]

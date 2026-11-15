@@ -27,6 +27,10 @@ extends Control
 ## stays near, and Player 2's hand at the top is face up. On Player 2's turn, their deck draws and
 ## their hand plays onto their side of the table.
 ##
+## Hovering a card in a hand or on a field shows it big enough to read: a card in the hand grows
+## where it is, out of the edge of the screen; a card on a field shows beside it, on the side with
+## more room. Not while a card is being dragged.
+##
 ## The back arrow leaves the game and the room, and goes back to the room list.
 
 const PLAY_SCENE := "res://scenes/play.tscn"
@@ -46,6 +50,10 @@ const GREEN := Color(0.3, 0.8, 0.42)
 const RED := Color(0.88, 0.3, 0.3)
 const MUTED := Color(0.62, 0.64, 0.74)
 const TurnArrow := preload("res://scripts/game/turn_arrow.gd")
+## How tall a card shown big is: this much of the screen, but never bigger than its picture.
+const PREVIEW_SCREEN_SHARE := 0.6
+## The gap between a card on the field and its big copy, and between that and the screen's edges.
+const PREVIEW_GAP := 16.0
 
 ## The connection to the room's host. The Online autoload, unless a test gives another.
 var online: Lobby = Online
@@ -54,14 +62,15 @@ var change_scenes := true
 ## Where the cards of the hand come from (tests give their own).
 var catalog := CardCatalog.new(CardLibrary.new(CardLibrary.OFFICIAL_DIRECTORY), CardLibrary.new())
 
-## Every card the player has (id -> CardData), and the pictures shown so far (id -> texture).
+## Every card the player has (id -> CardData).
 var _cards: Dictionary = {}
-var _textures: Dictionary = {}
 ## The opponent left, so the game cannot go on.
 var _opponent_gone := false
 ## The graveyard opened to look inside, and whose it is (a side of the table, -1 while closed).
 var _grave_viewer: GraveViewer
 var _viewer_side := -1
+## The card under the mouse, shown big enough to read.
+var _preview: TextureRect
 
 @onready var _time_label: Label = %TimeLabel
 @onready var _opponent_label: Label = %OpponentLabel
@@ -83,6 +92,15 @@ func _ready() -> void:
 	_table.card_dropped.connect(func(_side: int, card_id: String) -> void: play_card(card_id))
 	_table.laid_out.connect(_place_band)
 	_table.grave_pressed.connect(open_grave)
+	_table.card_hovered.connect(_on_field_card_hovered)
+	_hand.hovered_changed.connect(_on_hand_card_hovered.bind(_hand))
+	_top_hand.hovered_changed.connect(_on_hand_card_hovered.bind(_top_hand))
+	_preview = TextureRect.new()
+	_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
+	_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_preview.visible = false
+	add_child(_preview)
 	_grave_viewer = GraveViewer.new()
 	add_child(_grave_viewer)
 	_hand.card_size = HAND_CARD_SIZE
@@ -210,12 +228,71 @@ func _show() -> void:
 		open_grave(_viewer_side)
 
 
+# --- Showing a card big ---------------------------------------------------------------------
+
+
+## The card shown big, or null while none is.
+func preview_texture() -> Texture2D:
+	return _preview.texture if _preview.visible else null
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_DRAG_BEGIN:
+		_hide_preview()
+
+
+func _on_hand_card_hovered(card: Control, hand: HandView) -> void:
+	var thumb := card as CardThumb
+	var texture := catalog.face_texture(thumb.card_id) if thumb != null else null
+	if texture == null or get_viewport().gui_is_dragging():
+		_hide_preview()
+		return
+	var size := _preview_size(texture)
+	var rect := card.get_global_rect()
+	var x := clampf(rect.get_center().x - size.x * 0.5, PREVIEW_GAP, self.size.x - size.x - PREVIEW_GAP)
+	# Out of the hand's edge of the screen, as if the card grew where it is.
+	var y := 0.0 if hand.from_top else self.size.y - size.y
+	_show_preview(texture, Vector2(x, y), size)
+
+
+func _on_field_card_hovered(side: int, index: int) -> void:
+	var texture: Texture2D = _table.card_entry(side, index)[2] if side != -1 else null
+	if texture == null or get_viewport().gui_is_dragging():
+		_hide_preview()
+		return
+	var size := _preview_size(texture)
+	var rect := _table.card_screen_rect(side, index)
+	# Beside the card, on whichever side of it has more room.
+	var x := rect.end.x + PREVIEW_GAP
+	if rect.get_center().x > self.size.x * 0.5:
+		x = rect.position.x - PREVIEW_GAP - size.x
+	var y := clampf(rect.get_center().y - size.y * 0.5, PREVIEW_GAP, self.size.y - size.y - PREVIEW_GAP)
+	_show_preview(texture, Vector2(x, y), size)
+
+
+func _preview_size(texture: Texture2D) -> Vector2:
+	var height := minf(size.y * PREVIEW_SCREEN_SHARE, texture.get_height())
+	return Vector2(height * texture.get_width() / texture.get_height(), height)
+
+
+func _show_preview(texture: Texture2D, at: Vector2, preview_size: Vector2) -> void:
+	_preview.texture = texture
+	_preview.position = at
+	_preview.size = preview_size
+	_preview.visible = true
+
+
+func _hide_preview() -> void:
+	_preview.visible = false
+
+
 ## Opens a side's graveyard over the board, to see the cards in it.
 func open_grave(side: int) -> void:
 	var view := online.game_view
 	if view.is_empty():
 		return
 	_viewer_side = side
+	_hide_preview()
 	var mine := side == BOTTOM
 	var ids: Array = view["grave"] if mine else view["opponent_grave"]
 	var names: Dictionary = {} if mine else view.get("card_names", {})
@@ -322,14 +399,6 @@ func _entries(card_ids: Array, names: Dictionary) -> Array:
 		var id := str(card_id)
 		var card: CardData = _cards.get(id)
 		var card_name: String = card.card_name if card != null else str(names.get(id, "Unknown card"))
-		entries.append([id, card_name, _texture(id) if card != null else null])
+		entries.append([id, card_name, catalog.face_texture(id) if card != null else null])
 	return entries
 
-
-func _texture(card_id: String) -> Texture2D:
-	if not _textures.has(card_id):
-		var face := catalog.load_face(card_id)
-		if face != null:
-			face.generate_mipmaps()
-		_textures[card_id] = ImageTexture.create_from_image(face) if face != null else null
-	return _textures[card_id]

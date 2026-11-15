@@ -1,4 +1,4 @@
-extends GutTest
+﻿extends GutTest
 
 const TEST_CARDS_DIR := "user://test_cards"
 const TEST_DECKS_DIR := "user://test_decks"
@@ -216,6 +216,46 @@ func test_card_library_roundtrip_with_art_and_face() -> void:
 	assert_null(library.load_face(card.id))
 
 
+func test_a_library_keeps_every_card_in_one_file_sorted_by_name() -> void:
+	var library := CardLibrary.new(TEST_CARDS_DIR)
+	library.save_card(_card("", "Zed", 5))
+	library.save_card(_card("", "Alpha", 10))
+	var saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(TEST_CARDS_DIR.path_join("cards.json")))
+	assert_eq((saved as Array).map(func(entry: Dictionary) -> String: return entry["card_name"]), ["Alpha", "Zed"])
+	assert_eq((saved[0] as Dictionary).keys()[0], "id", "each card's fields in the order they are printed")
+	assert_eq(DirAccess.get_files_at(TEST_CARDS_DIR).size(), 1, "no file per card")
+
+
+func test_the_official_cards_cannot_be_changed_outside_the_editor() -> void:
+	var library := CardLibrary.new(TEST_CARDS_DIR)
+	var card := _card("", "Founder", 10)
+	library.save_card(card)
+	library.read_only = true
+	card.time_cost = 0
+	assert_eq(library.save_card(card), ERR_FILE_NO_PERMISSION)
+	assert_eq(library.save_card(_card("", "New")), ERR_FILE_NO_PERMISSION)
+	library.delete_card(card.id)
+	assert_eq(library.load_cards().size(), 1, "nothing added or removed")
+	assert_eq(library.load_cards()[0].time_cost, 10, "nor changed")
+	assert_false(CardLibrary.new(TEST_CARDS_DIR).read_only, "the player's own cards can be changed")
+	assert_eq(
+		CardLibrary.new(CardLibrary.OFFICIAL_DIRECTORY).read_only, not OS.has_feature("editor"),
+		"the official ones only in the editor"
+	)
+
+
+func test_a_library_saved_one_file_per_card_is_moved_into_one_file() -> void:
+	DirAccess.make_dir_recursive_absolute(TEST_CARDS_DIR)
+	for card in [_card("old1", "Old one", 5), _card("old2", "Old two", 10)]:
+		var file := FileAccess.open(TEST_CARDS_DIR.path_join("%s.json" % card.id), FileAccess.WRITE)
+		file.store_string(JSON.stringify(card.to_dict()))
+		file.close()
+	var library := CardLibrary.new(TEST_CARDS_DIR)
+	assert_eq(library.load_cards().size(), 2)
+	assert_eq(Array(DirAccess.get_files_at(TEST_CARDS_DIR)), ["cards.json"], "the old files are gone")
+	assert_eq(library.load_cards()[1].time_cost, 10, "and the cards kept")
+
+
 func test_saving_a_card_again_updates_it() -> void:
 	var library := CardLibrary.new(TEST_CARDS_DIR)
 	var card := _card("", "First name")
@@ -419,7 +459,7 @@ func test_deck_builder_offers_official_and_custom_cards() -> void:
 	assert_has(scene._cards_by_id, founder.id)
 	scene._add_card(founder.id)
 	assert_eq(scene._deck.copies(founder.id), 1, "an official card can go in a deck")
-	assert_not_null(scene._textures.get(founder.id), "and it shows its picture")
+	assert_not_null(scene._catalog.face_texture(founder.id), "and it shows its picture")
 
 
 func test_card_catalog_merges_official_and_custom_cards() -> void:

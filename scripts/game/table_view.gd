@@ -8,9 +8,10 @@ extends Control
 ## player's at the bottom right, where the hand's strip starts; the other side is the same turned
 ## around, its column at the top left and its cards facing the other way.
 ##
-## The proportions are MTG Arena's: on a 16:9 screen a card on the player's field is about 6.5% of
-## the screen wide, the other side's cards about 85% of that, and the player's field about three
-## quarters of the screen across, with room for two rows.
+## The proportions are MTG Arena's: each side holds one row of cards, as Arena's row of creatures,
+## so on a 16:9 screen a card on the player's field is about a tenth of the screen wide, the other
+## side's cards a little smaller, and the player's field about three quarters of the screen across.
+## The deck and the graveyard are smaller than the cards on the field, as Arena's.
 ##
 ## The camera fits itself to the screen, whatever its size: the player's side reaches BOTTOM_ROOM
 ## pixels above the bottom of the screen, where their hand is, and as far across as the screen goes,
@@ -21,8 +22,8 @@ extends Control
 ## Playing alone (top_visible false) there is no other side: the band is at the top of the screen and
 ## the player's side, twice as deep, takes all the rest.
 ##
-## Where a card lies on a field does not matter: the cards line up by themselves in the middle of the
-## field, in one row while they fit, then shared evenly between two rows, closer together as needed.
+## Where a card lies on a field does not matter: the cards line up by themselves in one row in the
+## middle of the field, overlapping more and more once they no longer fit side by side.
 ##
 ## A deck is a stack as thick as the cards in it, so how full it is can be seen. A graveyard is a
 ## vortex (see vortex.gdshader): the cards in it cannot be seen. A card that goes into it starts from
@@ -30,7 +31,8 @@ extends Control
 ## as the other player's), and moves into the vortex getting smaller, without turning, until it is
 ## gone. Hovering a deck or a graveyard shows how many cards it holds.
 ##
-## The table only shows: what happens comes out as signals. Clicking a deck that is enabled emits
+## The table only shows: what happens comes out as signals. Moving the mouse onto a card on a field
+## or off it emits card_hovered (the board shows the card big enough to read). Clicking a deck that is enabled emits
 ## deck_pressed; clicking a graveyard emits grave_pressed (its cards are seen only that way). A card
 ## dragged from a hand (CardThumb.source as in hand_sources) can be dropped anywhere on that hand's
 ## side of the table while it accepts_drops; dropping emits card_dropped. Positions on screen are found by casting the mouse onto the table, so the slant does
@@ -39,6 +41,8 @@ extends Control
 signal deck_pressed(side: int)
 signal grave_pressed(side: int)
 signal card_dropped(side: int, card_id: String)
+## The mouse came onto a card on a field (its side and place, see card_entry), or off it (-1, -1).
+signal card_hovered(side: int, index: int)
 ## The table was laid out again (the screen changed size, or the other side came or went), so the
 ## band may have moved (see band_center).
 signal laid_out
@@ -46,13 +50,13 @@ signal laid_out
 const BOTTOM := 0
 const TOP := 1
 
-## Sizes on the table, in table units: a card is one unit wide, on a field and on a deck alike. A
-## field is FIELD_DEPTH deep (room for two rows of cards), twice that when playing alone.
+## Sizes on the table, in table units: a card on a field is one unit wide; a card on a deck is
+## smaller. A field is FIELD_DEPTH deep (room for one row of cards), twice that when playing alone.
 const CARD := Vector2(1.0, 1.4)
-const PILE_CARD := CARD
-const FIELD_DEPTH := 3.4
+const PILE_CARD := CARD * 0.62
+const FIELD_DEPTH := CARD.y + 0.6
 ## How the camera looks at the table: down at PITCH degrees, seeing FOV degrees from top to bottom.
-const PITCH := 80.0
+const PITCH := 64.0
 const FOV := 30.0
 ## The band across the middle of the screen, and the room left for the hands: above the other side
 ## and under the player's, in pixels.
@@ -67,10 +71,11 @@ const CARD_GAP := 0.16
 const PILE_GAP := 0.25
 ## How far the column of the deck and graveyard is set in from the edge of the screen (the player's;
 ## the other side's as far from its corner on screen), and from the field.
-const PILE_INSET := 0.5
+const PILE_INSET := 0.3
 const FIELD_TO_PILES := 0.45
-## How wide the graveyard's vortex is (as a card), and how long a card takes to go into it (seconds).
-const VORTEX := 1.0
+## How wide the graveyard's vortex is (as a card on the deck), and how long a card takes to go into
+## it (seconds).
+const VORTEX := 0.62
 const VORTEX_SECONDS := 0.7
 const VORTEX_SHADER := preload("res://assets/shaders/vortex.gdshader")
 ## How thick one card is in a stack: thicker than a real one, so a stack shows how full it is.
@@ -125,6 +130,7 @@ var _deck_counts: Array[int] = [0, 0]
 var _graves: Array = [[], []]
 ## What the mouse is over: [kind (&"deck", &"grave" or &""), side].
 var _hovered: Array = [&"", 0]
+var _hovered_card: Array = [-1, -1]
 ## Each side's vortex (kept across show_side, so it keeps turning), whether the side was shown
 ## before (cards already in a graveyard when the board opens do not fall again), and the cards
 ## going down into a vortex right now.
@@ -181,6 +187,8 @@ func show_side(side: int, field: Array, grave: Array, deck_count: int) -> void:
 	_cards[side] = field.duplicate()
 	_graves[side] = grave.duplicate()
 	_deck_counts[side] = deck_count
+	if _hovered_card[0] == side:
+		_set_hovered_card([-1, -1])
 	var holder := _sides[side]
 	for child in holder.get_children():
 		holder.remove_child(child)
@@ -202,6 +210,38 @@ func show_side(side: int, field: Array, grave: Array, deck_count: int) -> void:
 			_dropped_id[side] = ""
 		_fall_into_vortex(side, entry, from)
 	_update_badge()
+
+
+## A card on a side's field: [id, name, picture or null].
+func card_entry(side: int, index: int) -> Array:
+	return _cards[side][index]
+
+
+## Where a card on a field is on screen (the rectangle around it).
+func card_screen_rect(side: int, index: int) -> Rect2:
+	var center := card_center(side, index)
+	var rect := Rect2(screen_point(center), Vector2.ZERO)
+	for corner in [Vector3(-0.5, 0, -0.5), Vector3(0.5, 0, -0.5), Vector3(0.5, 0, 0.5), Vector3(-0.5, 0, 0.5)]:
+		rect = rect.expand(screen_point(center + corner * Vector3(CARD.x, 0, CARD.y)))
+	return rect
+
+
+## The card on a field under a point of the screen: [side, index], or [-1, -1].
+func card_at(at: Vector2) -> Array:
+	var point: Variant = table_point(at)
+	if point != null:
+		for side in 2:
+			if side == TOP and not top_visible:
+				continue
+			for i in range(_cards[side].size() - 1, -1, -1):
+				if _covers(card_center(side, i), CARD, point):
+					return [side, i]
+	return [-1, -1]
+
+
+## The card on a field under the mouse: [side, index], or [-1, -1].
+func hovered_card() -> Array:
+	return _hovered_card
 
 
 ## The ids of the cards on a side's field, in the order played.
@@ -274,28 +314,17 @@ func field_center(side: int) -> Vector3:
 	return Vector3(-x, 0.0, -z) if side == TOP else Vector3(x, 0.0, z)
 
 
-## Where the card played `index`-th lies on a side's field. One row of cards sits in the middle of
-## the field; when they do not fit in one, they share two rows evenly, the first nearest the middle
-## of the table.
+## Where the card played `index`-th lies on a side's field: in one row in the middle of the field,
+## side by side while they fit, then closer together, overlapping, so the row stays on the field.
 func card_center(side: int, index: int) -> Vector3:
 	var count: int = maxi(1, _cards[side].size())
 	var room := field_size().x - MARGIN * 2.0
-	var per_row := maxi(1, floori((room + CARD_GAP) / (CARD.x + CARD_GAP)))
-	var rows := 1 if count <= per_row else 2
-	if rows == 2:
-		per_row = ceili(count / 2.0)
-	var row := floori(float(index) / per_row)
-	var in_row: int = per_row if row < rows - 1 else count - per_row * (rows - 1)
 	var step := CARD.x + CARD_GAP
-	if in_row > 1:
-		step = minf(step, (room - CARD.x) / (per_row - 1))
+	if count > 1:
+		step = minf(step, (room - CARD.x) / (count - 1))
 	var middle := field_center(BOTTOM)
-	var x := middle.x + (index % per_row - (in_row - 1) * 0.5) * step
-	var z := middle.z
-	if rows == 2:
-		var front := half_band() + EDGE + MARGIN + CARD.y * 0.5
-		z = front + row * (CARD.y + CARD_GAP)
-	return Vector3(-x, 0.0, -z) if side == TOP else Vector3(x, 0.0, z)
+	var x := middle.x + (index - (count - 1) * 0.5) * step
+	return Vector3(-x, 0.0, -middle.z) if side == TOP else Vector3(x, 0.0, middle.z)
 
 
 ## The middle of a side's graveyard (&"grave") or deck (&"deck") on the table: in a column beside
@@ -359,6 +388,7 @@ func _gui_input(event: InputEvent) -> void:
 	var motion := event as InputEventMouseMotion
 	if motion != null:
 		_set_hovered(pile_at(motion.position))
+		_set_hovered_card(card_at(motion.position))
 		return
 	var click := event as InputEventMouseButton
 	if click != null and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
@@ -395,6 +425,14 @@ func _side_for(data: Variant) -> int:
 
 func _on_mouse_exited() -> void:
 	_set_hovered([&"", 0])
+	_set_hovered_card([-1, -1])
+
+
+func _set_hovered_card(card: Array) -> void:
+	if card == _hovered_card:
+		return
+	_hovered_card = card
+	card_hovered.emit(card[0], card[1])
 
 
 func _set_hovered(pile: Array) -> void:
@@ -416,7 +454,7 @@ func _update_badge() -> void:
 		return
 	var side: int = _hovered[1]
 	var count := deck_count(side) if kind == &"deck" else grave_count(side)
-	_badge.text = PileBadge.count_text(count) + (" in the graveyard" if kind == &"grave" else "")
+	_badge.text = PileBadge.count_text(count)
 	_badge.reset_size()
 	var top := pile_center(side, kind)
 	if kind == &"deck":

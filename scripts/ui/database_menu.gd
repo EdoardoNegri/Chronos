@@ -51,7 +51,6 @@ var points_list := PointsList.new()
 ## Official and custom cards together; the catalog says which of them are custom.
 var _catalog: CardCatalog
 var _cards: Array[CardData] = []
-var _faces: Dictionary[String, Texture2D] = {}
 var _results: Array[CardData] = []
 var _page := "form"
 var _flow: HFlowContainer
@@ -119,12 +118,6 @@ func _load_library() -> void:
 	_catalog = CardCatalog.new(official_library, card_library)
 	_cards = _catalog.load_cards(false)
 	_form.setup(_cards, _catalog)
-	_faces.clear()
-	for card in _cards:
-		var face := _catalog.load_face(card.id)
-		if face != null:
-			face.generate_mipmaps()
-			_faces[card.id] = ImageTexture.create_from_image(face)
 
 
 ## Shows one page: "form", "results" or "detail".
@@ -250,7 +243,7 @@ func _fit_flow() -> void:
 ## The card image, which opens the card when clicked.
 func _make_tile(card: CardData) -> Button:
 	var tile := _make_clickable(card)
-	var face: Texture2D = _faces.get(card.id)
+	var face := _catalog.face_texture(card.id)
 	if face != null:
 		var picture := TextureRect.new()
 		picture.texture = face
@@ -362,7 +355,7 @@ func _open_card(card_id: String) -> void:
 	var card := _find_card(card_id)
 	if card == null:
 		return
-	_detail_image.texture = _faces.get(card_id)
+	_detail_image.texture = _catalog.face_texture(card_id)
 	_detail_image.visible = _detail_image.texture != null
 	for child in _detail_info.get_children():
 		_detail_info.remove_child(child)

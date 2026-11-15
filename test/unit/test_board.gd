@@ -27,8 +27,8 @@ func _local_game(both: bool, options := GameOptions.new()) -> Lobby:
 
 ## The board, laid out in a window the size of the game's (the table needs its size to find things
 ## on screen).
-func _board(lobby: Lobby) -> Control:
-	var made: Array = await _board_in_window(lobby)
+func _board(lobby: Lobby, with_pictures := false) -> Control:
+	var made: Array = await _board_in_window(lobby, with_pictures)
 	return made[1]
 
 
@@ -216,6 +216,45 @@ func test_the_whole_hand_comes_up_while_the_mouse_is_on_it() -> void:
 	hand._input(_hover(hand.get_global_transform() * Vector2(-500, 10)))
 	assert_false(hand.is_raised(), "then tucks away again")
 
+func test_hovering_a_card_in_the_hand_shows_it_big_enough_to_read() -> void:
+	var board: Control = await _board(_local_game(false, _player_1_starts()), true)
+	var hand: HandView = board.get_node("%Hand")
+	var card := hand.cards()[2] as CardThumb
+	assert_not_null(board.catalog.face_texture(card.card_id))
+	assert_null(board.preview_texture())
+	hand._input(_hover(hand.get_global_transform() * Vector2(card.position.x + 5, hand.size.y - 10)))
+	assert_not_null(board.preview_texture(), "the card under the mouse shows big")
+	assert_eq(board.preview_texture(), board.catalog.face_texture(card.card_id))
+	var big: Control = board._preview
+	assert_gt(big.size.y, card.size.y * 2.0, "much bigger than in the hand")
+	assert_almost_eq(big.get_global_rect().end.y, board.size.y, 1.0, "growing out of the bottom of the screen")
+	assert_lt(absf(big.get_global_rect().get_center().x - card.get_global_rect().get_center().x), big.size.x * 0.5, "where the card is")
+	hand._input(_hover(hand.get_global_transform() * Vector2(-500, 10)))
+	assert_null(board.preview_texture(), "and goes away with the mouse")
+
+
+func test_hovering_a_card_on_the_field_shows_it_big_beside_it() -> void:
+	var lobby := _local_game(false, _player_1_starts())
+	var board: Control = await _board(lobby, true)
+	var table := _table(board)
+	var card_id: String = _creature_in(lobby.game_view["hand"])
+	if card_id.is_empty():
+		pending("no creature in this opening hand")
+		return
+	board.play_card(card_id)
+	assert_eq(table.cards_on(BOTTOM), [card_id] as Array[String])
+	table._gui_input(_hover(table.screen_point(table.card_center(BOTTOM, 0))))
+	assert_eq(table.hovered_card(), [BOTTOM, 0])
+	assert_not_null(board.preview_texture())
+	assert_eq(board.preview_texture(), board.catalog.face_texture(card_id), "the card shows big")
+	assert_gt((board._preview as Control).size.y, table.card_screen_rect(BOTTOM, 0).size.y * 2.0, "much bigger")
+	var big := (board._preview as Control).get_global_rect()
+	assert_false(big.intersects(table.card_screen_rect(BOTTOM, 0)), "beside it, not over it")
+	assert_true(board.get_viewport_rect().encloses(big), "and on screen")
+	table._gui_input(_hover(_field_point(table, BOTTOM, Vector3(0, 0, 1.5))))
+	assert_null(board.preview_texture(), "off the card it goes away")
+
+
 func test_a_card_let_go_over_the_hand_but_above_it_still_reaches_the_field() -> void:
 	var lobby := _local_game(false, _player_1_starts())
 	var board: Control = await _board(lobby)
@@ -278,7 +317,8 @@ func test_cards_on_a_field_line_up_by_themselves() -> void:
 	var middle := (first.x + table.card_center(BOTTOM, 2).x) * 0.5
 	assert_almost_eq(middle, table.field_center(BOTTOM).x, 0.001, "in the middle of the field")
 	table.show_side(BOTTOM, cards.call(24), [], 0)
-	assert_lt(table.card_center(BOTTOM, 0).z, table.card_center(BOTTOM, 23).z, "more make a second row")
+	assert_eq(table.card_center(BOTTOM, 0).z, table.card_center(BOTTOM, 23).z, "many still make one row")
+	assert_lt(table.card_center(BOTTOM, 1).x - table.card_center(BOTTOM, 0).x, TableView.CARD.x, "overlapping")
 	table.show_side(BOTTOM, cards.call(40), [], 0)
 	for i in 40:
 		var center := table.card_center(BOTTOM, i)
@@ -414,14 +454,16 @@ func test_the_table_is_seen_from_above_with_a_slight_slant() -> void:
 	assert_between(my_depth / my_width, 0.9, 1.05, "and the table is hardly foreshortened")
 
 ## The board in a viewport of its own, which takes mouse events as the game window does.
-func _board_in_window(lobby: Lobby) -> Array:
+## The cards have no pictures unless `with_pictures` (the official ones'), so the board opens quickly.
+func _board_in_window(lobby: Lobby, with_pictures := false) -> Array:
 	var window := SubViewport.new()
 	window.size = Vector2i(1152, 648)
 	add_child_autofree(window)
 	var board: Control = load("res://scenes/board.tscn").instantiate()
 	board.online = lobby
 	board.change_scenes = false
-	board.catalog = CardCatalog.new(CardLibrary.new("user://test_board_no_cards"), CardLibrary.new("user://test_board_no_cards"))
+	if not with_pictures:
+		board.catalog = CardCatalog.new(CardLibrary.new("user://test_board_no_cards"), CardLibrary.new("user://test_board_no_cards"))
 	window.add_child(board)
 	await wait_physics_frames(3)
 	return [window, board]
@@ -456,8 +498,8 @@ func test_the_sizes_are_those_of_mtg_arena() -> void:
 		return table.screen_point(at + Vector3(0.5, 0, 0)).x - table.screen_point(at - Vector3(0.5, 0, 0)).x
 	var mine: float = across.call(table.field_center(BOTTOM))
 	var theirs: float = across.call(table.field_center(TOP))
-	assert_between(mine / width, 0.055, 0.075, "a card on my field is about 6.5% of the screen wide")
-	assert_between(theirs / mine, 0.85, 0.98, "the other side's a little smaller")
+	assert_between(mine / width, 0.09, 0.115, "a card on my field is about a tenth of the screen wide")
+	assert_between(theirs / mine, 0.8, 0.95, "the other side's a little smaller")
 	var half := Vector3(table.field_size().x * 0.5, 0, 0)
 	var field := table.screen_point(table.field_center(BOTTOM) + half).x - table.screen_point(table.field_center(BOTTOM) - half).x
 	assert_gt(field / width, 0.7, "my field is about three quarters of the screen across")
@@ -495,10 +537,7 @@ func test_the_deck_is_a_card_and_sits_at_the_outer_edge_of_its_side() -> void:
 	var across := func(at: Vector3) -> float:
 		return table.screen_point(at + Vector3(0.5, 0, 0)).x - table.screen_point(at - Vector3(0.5, 0, 0)).x
 	var deck := table.pile_center(BOTTOM, &"deck")
-	assert_eq(TableView.PILE_CARD, TableView.CARD, "the deck is the size of a card on the field")
-	assert_almost_eq(
-		across.call(deck), across.call(table.field_center(BOTTOM)), across.call(deck) * 0.15, "and looks it"
-	)
+	assert_between(TableView.PILE_CARD.x / TableView.CARD.x, 0.55, 0.7, "the deck smaller than a card on the field")
 	var grave := table.pile_center(BOTTOM, &"grave")
 	var screen := board.get_viewport_rect().size
 	var deck_bottom := table.screen_point(deck + Vector3(0, 0, TableView.PILE_CARD.y * 0.5)).y

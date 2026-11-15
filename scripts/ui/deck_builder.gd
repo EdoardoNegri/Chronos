@@ -39,7 +39,8 @@ var _cards_by_id: Dictionary[String, CardData] = {}
 ## What the search box looks through for each card (id -> its name, subtype and text, in lower
 ## case), made once when the library loads.
 var _haystacks: Dictionary[String, String] = {}
-var _textures: Dictionary[String, Texture2D] = {}
+## Official and custom cards together, with their pictures.
+var _catalog: CardCatalog
 var _deck := DeckData.new()
 var _selected_id := ""
 var _result_thumbs: Dictionary[String, CardThumb] = {}
@@ -144,26 +145,21 @@ func _make_dialog(mode: FileDialog.FileMode, filters: Array[String]) -> FileDial
 
 ## Decks can use the official cards and the player's custom ones.
 func _load_library() -> void:
-	var catalog := CardCatalog.new(official_library, card_library)
-	_cards = catalog.load_cards(false)
-	_filters_form.setup(_cards, catalog)
+	_catalog = CardCatalog.new(official_library, card_library)
+	_cards = _catalog.load_cards(false)
+	_filters_form.setup(_cards, _catalog)
 	_cards_by_id.clear()
 	_haystacks.clear()
-	_textures.clear()
 	for card in _cards:
 		_cards_by_id[card.id] = card
 		_haystacks[card.id] = ("%s %s %s" % [card.card_name, card.subtype, card.rules_text]).to_lower()
-		var face := catalog.load_face(card.id)
-		if face != null:
-			face.generate_mipmaps()
-			_textures[card.id] = ImageTexture.create_from_image(face)
 
 
 func _make_thumb(card_id: String) -> CardThumb:
 	var card: CardData = _cards_by_id.get(card_id)
 	var thumb := CardThumb.new()
 	thumb.source = SOURCE_RESULTS
-	thumb.setup(card_id, card.card_name if card != null else "Missing card", _textures.get(card_id))
+	thumb.setup(card_id, card.card_name if card != null else "Missing card", _catalog.face_texture(card_id))
 	thumb.selected.connect(_select)
 	return thumb
 
@@ -478,7 +474,7 @@ func _apply_highlight() -> void:
 
 func _show_details(card_id: String) -> void:
 	var card: CardData = _cards_by_id.get(card_id)
-	_preview.texture = _textures.get(card_id)
+	_preview.texture = _catalog.face_texture(card_id)
 	if card == null:
 		_info.show_nothing()
 		return

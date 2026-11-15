@@ -1,0 +1,200 @@
+[
+	{
+		"id": "official_brass_cadet",
+		"card_name": "Brass Cadet",
+		"card_type": "Creature",
+		"subtype": "Construct",
+		"time_cost": 15,
+		"points": 1,
+		"attack": 2,
+		"defense": 2,
+		"rules_text": "Can attack the turn it enters."
+	},
+	{
+		"id": "official_chrono_drake",
+		"card_name": "Chrono Drake",
+		"card_type": "Creature",
+		"subtype": "Dragon",
+		"time_cost": 30,
+		"points": 3,
+		"attack": 3,
+		"defense": 4,
+		"rules_text": "When this enters, draw a card."
+	},
+	{
+		"id": "official_clockwork_golem",
+		"card_name": "Clockwork Golem",
+		"card_type": "Creature",
+		"subtype": "Construct",
+		"time_cost": 45,
+		"points": 3,
+		"attack": 5,
+		"defense": 6,
+		"rules_text": "Cannot be targeted by spells."
+	},
+	{
+		"id": "official_cog_rat",
+		"card_name": "Cog Rat",
+		"card_type": "Creature",
+		"subtype": "Beast",
+		"time_cost": 5,
+		"points": 1,
+		"attack": 1,
+		"defense": 1,
+		"rules_text": "Small, fast and everywhere."
+	},
+	{
+		"id": "official_dust_wraith",
+		"card_name": "Dust Wraith",
+		"card_type": "Creature",
+		"subtype": "Spirit",
+		"time_cost": 15,
+		"points": 1,
+		"attack": 2,
+		"defense": 2,
+		"rules_text": "Cannot be blocked by creatures with time cost 30 or more."
+	},
+	{
+		"id": "official_epoch_titan",
+		"card_name": "Epoch Titan",
+		"card_type": "Creature",
+		"subtype": "Giant",
+		"time_cost": 55,
+		"points": 4,
+		"attack": 7,
+		"defense": 7,
+		"rules_text": "When this enters, destroy a creature with time cost 20 or less."
+	},
+	{
+		"id": "official_gear_scout",
+		"card_name": "Gear Scout",
+		"card_type": "Creature",
+		"subtype": "Construct",
+		"time_cost": 15,
+		"points": 1,
+		"attack": 2,
+		"defense": 1,
+		"rules_text": "When this enters, look at the top card of your deck."
+	},
+	{
+		"id": "official_hourglass_sprite",
+		"card_name": "Hourglass Sprite",
+		"card_type": "Creature",
+		"subtype": "Fairy",
+		"time_cost": 10,
+		"points": 1,
+		"attack": 1,
+		"defense": 2,
+		"rules_text": "When this enters, draw a card."
+	},
+	{
+		"id": "official_minute_knight",
+		"card_name": "Minute Knight",
+		"card_type": "Creature",
+		"subtype": "Warrior",
+		"time_cost": 20,
+		"points": 2,
+		"attack": 3,
+		"defense": 3,
+		"rules_text": "Strikes exactly on the minute."
+	},
+	{
+		"id": "official_pause",
+		"card_name": "Pause",
+		"card_type": "Spell",
+		"subtype": "",
+		"time_cost": 15,
+		"points": 1,
+		"attack": 0,
+		"defense": 0,
+		"rules_text": "Choose a creature. It cannot attack this turn."
+	},
+	{
+		"id": "official_pendulum_guard",
+		"card_name": "Pendulum Guard",
+		"card_type": "Creature",
+		"subtype": "Warrior",
+		"time_cost": 25,
+		"points": 2,
+		"attack": 2,
+		"defense": 5,
+		"rules_text": "Creatures that attack this one lose 1 attack until the end of the turn."
+	},
+	{
+		"id": "official_quick_slash",
+		"card_name": "Quick Slash",
+		"card_type": "Spell",
+		"subtype": "",
+		"time_cost": 5,
+		"points": 1,
+		"attack": 0,
+		"defense": 0,
+		"rules_text": "Deal 1 damage to a creature. Draw a card."
+	},
+	{
+		"id": "official_rewind",
+		"card_name": "Rewind",
+		"card_type": "Spell",
+		"subtype": "",
+		"time_cost": 10,
+		"points": 2,
+		"attack": 0,
+		"defense": 0,
+		"rules_text": "Return a creature to its owner's hand."
+	},
+	{
+		"id": "official_second_archer",
+		"card_name": "Second Archer",
+		"card_type": "Creature",
+		"subtype": "Archer",
+		"time_cost": 10,
+		"points": 1,
+		"attack": 2,
+		"defense": 1,
+		"rules_text": "Can attack from behind other creatures."
+	},
+	{
+		"id": "official_stall",
+		"card_name": "Stall",
+		"card_type": "Spell",
+		"subtype": "",
+		"time_cost": 10,
+		"points": 1,
+		"attack": 0,
+		"defense": 0,
+		"rules_text": "Your opponent's next card costs 5 more time."
+	},
+	{
+		"id": "official_time_skip",
+		"card_name": "Time Skip",
+		"card_type": "Spell",
+		"subtype": "",
+		"time_cost": 30,
+		"points": 3,
+		"attack": 0,
+		"defense": 0,
+		"rules_text": "Draw 3 cards."
+	},
+	{
+		"id": "official_time_weaver",
+		"card_name": "Time Weaver",
+		"card_type": "Creature",
+		"subtype": "Mage",
+		"time_cost": 25,
+		"points": 2,
+		"attack": 2,
+		"defense": 3,
+		"rules_text": "When this enters, draw a card, then put a card from your hand on the bottom of your deck."
+	},
+	{
+		"id": "official_zap",
+		"card_name": "Zap",
+		"card_type": "Spell",
+		"subtype": "",
+		"time_cost": 5,
+		"points": 1,
+		"attack": 0,
+		"defense": 0,
+		"rules_text": "Deal 2 damage to a creature."
+	}
+]

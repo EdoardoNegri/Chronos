@@ -8,6 +8,10 @@ extends Control
 ## The player's hand is tucked under the bottom edge; the hand at the top (`from_top`) above the top
 ## edge. The control is as tall as a card, over the table: a card dragged from the hand and let go
 ## above the strip is passed on to `drop_target` (the table), so the whole field takes cards.
+##
+## When the card under the mouse changes, hovered_changed says which it is now (null for none).
+
+signal hovered_changed(card: Control)
 
 ## How much of a tucked card shows, and the gap between cards when they all fit.
 const MIN_SHOWN := 0.32
@@ -42,7 +46,9 @@ func _init() -> void:
 
 ## Shows these cards in the hand (made to card_size), in order. The hand stays up if it was.
 func show_cards(cards: Array[Control]) -> void:
-	_hovered = null
+	if _hovered != null:
+		_hovered = null
+		hovered_changed.emit(null)
 	for child in get_children():
 		remove_child(child)
 		child.queue_free()
@@ -143,6 +149,7 @@ func _hover_at(point: Vector2) -> void:
 	if raised == _raised and found == _hovered:
 		return
 	_raised = raised
+	var changed := found != _hovered
 	_hovered = found
 	# Back in the order of the hand, then the one under the mouse in front.
 	for i in _cards.size():
@@ -150,6 +157,8 @@ func _hover_at(point: Vector2) -> void:
 	if found != null:
 		move_child(found, -1)
 	_layout()
+	if changed:
+		hovered_changed.emit(found)
 
 
 ## Where the cards are: up in full view, or just their strips while tucked away.
