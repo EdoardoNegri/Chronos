@@ -6,6 +6,7 @@ const Decks := preload("res://test/helpers/decks.gd")
 const FakeGitHub := preload("res://test/helpers/fake_github.gd")
 const BOTTOM := TableView.BOTTOM
 const TOP := TableView.TOP
+const Board := preload("res://scripts/game/board.gd")
 
 
 ## A local game that has started, with both players controlled from here if `both`.
@@ -77,31 +78,29 @@ func _creature_in(hand: Array) -> String:
 func test_on_your_turn_the_timer_is_green_and_clicking_the_deck_draws() -> void:
 	var board: Control = await _board(_local_game(false, _player_1_starts()))
 	var table := _table(board)
-	var bar: TimeBar = board.get_node("%TimeBar")
+	var time: Label = board.get_node("%TimeLabel")
 	var hand: HandView = board.get_node("%Hand")
-	assert_eq(board.get_node("%TimeLabel").text, "0")
-	assert_true(bar.your_turn)
-	assert_eq(bar.fill_color(), TimeBar.GREEN)
+	assert_eq(time.text, "0")
+	assert_eq(time.get_theme_color("font_color"), Board.GREEN)
 	assert_eq(table.deck_count(BOTTOM), 54 - GameOptions.DEFAULT_HAND_SIZE)
 	assert_eq(hand.cards().size(), GameOptions.DEFAULT_HAND_SIZE)
-	assert_eq(board.get_node("%PlayerLabel").text, "Aeon", "my name, at the right of the timer")
-	assert_gt(
-		(board.get_node("%PlayerLabel") as Control).get_global_rect().position.x,
-		(board.get_node("%TimeBar") as Control).get_global_rect().end.x,
-		"right of the bar"
-	)
+	assert_eq(board.get_node("%PlayerLabel").text, "Aeon", "my name, at the left of the timer")
 	assert_lt(
-		(board.get_node("%OpponentLabel") as Control).get_global_rect().end.x,
-		(board.get_node("%TimeBar") as Control).get_global_rect().position.x,
-		"the opponent's left of it"
+		(board.get_node("%PlayerLabel") as Control).get_global_rect().end.x,
+		time.get_global_rect().position.x,
+		"left of the timer"
 	)
-	assert_false(board.has_node("%TurnLabel"), "nothing says whose turn it is but the timer")
+	assert_gt(
+		(board.get_node("%OpponentLabel") as Control).get_global_rect().position.x,
+		time.get_global_rect().end.x,
+		"the opponent's right of it"
+	)
+	assert_true(board.get_node("%LeftTurnArrow").shown, "the arrow points at me: my turn")
+	assert_false(board.get_node("%RightTurnArrow").shown)
 
 	table._gui_input(_click(_pile_point(table, BOTTOM, &"deck")))
-	assert_eq(board.get_node("%TimeLabel").text, "40", "the draw cost its time")
-	assert_true(bar.your_turn, "alone, it is always my turn")
-	assert_eq(bar.fill_color(), TimeBar.GREEN)
-	assert_gt(bar.fill_rect().position.x, bar.size.x * 0.5 - 0.1, "so the bar is green on the right, toward my name")
+	assert_eq(time.text, "40", "the draw cost its time")
+	assert_eq(time.get_theme_color("font_color"), Board.GREEN, "alone, it is always my turn")
 	assert_eq(table.deck_count(BOTTOM), 54 - GameOptions.DEFAULT_HAND_SIZE - 1)
 	assert_eq(hand.cards().size(), GameOptions.DEFAULT_HAND_SIZE + 1)
 
@@ -121,17 +120,18 @@ func test_with_both_players_the_board_stays_on_player_1s_side() -> void:
 	var lobby := _local_game(true, _player_1_starts())
 	var board: Control = await _board(lobby)
 	var table := _table(board)
-	var bar: TimeBar = board.get_node("%TimeBar")
-	assert_true(bar.your_turn, "Player 1's turn")
+	var time: Label = board.get_node("%TimeLabel")
+	assert_eq(time.get_theme_color("font_color"), Board.GREEN, "Player 1's turn")
 	assert_eq(board.get_node("%PlayerLabel").text, "Player 1")
 	assert_eq(board.get_node("%OpponentLabel").text, "Player 2")
 	assert_eq(table.deck_enabled, [true, false] as Array[bool])
 	table._gui_input(_click(_pile_point(table, TOP, &"deck")))
 	assert_eq(lobby.game_view["time_ahead"], 0, "Player 2's deck waits on Player 1's turn")
 	table._gui_input(_click(_pile_point(table, BOTTOM, &"deck")))
-	assert_eq(bar.value, -40, "seen from Player 1: Player 2 has 40 time, so the bar grows toward them")
-	assert_false(bar.your_turn, "and it is red")
-	assert_eq(board.get_node("%TimeLabel").text, "40")
+	assert_eq(time.get_theme_color("font_color"), Board.RED, "seen from Player 1: Player 2 has the time")
+	assert_false(board.get_node("%LeftTurnArrow").shown)
+	assert_true(board.get_node("%RightTurnArrow").shown, "the arrow points right, at Player 2")
+	assert_eq(time.text, "40")
 	assert_eq(table.deck_enabled, [false, true] as Array[bool], "now Player 2's deck, at the far side, draws")
 	var their_hand: HandView = board.get_node("%OpponentHand")
 	assert_eq(their_hand.cards().size(), GameOptions.DEFAULT_HAND_SIZE)
@@ -139,7 +139,8 @@ func test_with_both_players_the_board_stays_on_player_1s_side() -> void:
 	table._gui_input(_click(_pile_point(table, TOP, &"deck")))
 	assert_eq(lobby.second_game_view["time_ahead"], 0, "Player 2 drew for their time")
 	assert_eq(their_hand.cards().size(), GameOptions.DEFAULT_HAND_SIZE + 1)
-	assert_true(bar.your_turn, "Player 1's turn again")
+	assert_eq(time.get_theme_color("font_color"), Board.GREEN, "Player 1's turn again")
+	assert_true(board.get_node("%LeftTurnArrow").shown, "and left, at Player 1, again")
 
 
 func test_on_the_opponents_turn_the_timer_is_red_and_their_hand_is_face_down() -> void:
@@ -150,11 +151,9 @@ func test_on_the_opponents_turn_the_timer_is_red_and_their_hand_is_face_down() -
 	# Only Player 1's side: as a game against someone else shows it.
 	lobby.controls_both = false
 	var board: Control = await _board(lobby)
-	var bar: TimeBar = board.get_node("%TimeBar")
-	assert_false(bar.your_turn)
-	assert_eq(bar.fill_color(), TimeBar.RED)
-	assert_eq(bar.value, -30, "the opponent has 30 time: the bar grows toward them")
-	assert_eq(board.get_node("%TimeLabel").text, "30")
+	var time: Label = board.get_node("%TimeLabel")
+	assert_eq(time.get_theme_color("font_color"), Board.RED, "the opponent has the time")
+	assert_eq(time.text, "30")
 	var table := _table(board)
 	assert_eq(table.deck_enabled, [false, false] as Array[bool])
 	assert_false(table.deck_clickable[TOP], "the other player's deck is only shown")
@@ -229,7 +228,7 @@ func test_a_card_let_go_over_the_hand_but_above_it_still_reaches_the_field() -> 
 	hand._drop_data(above, dragged)
 	assert_eq((lobby.game_view["hand"] as Array).size(), GameOptions.DEFAULT_HAND_SIZE - 1)
 
-func test_a_card_let_go_anywhere_on_your_field_is_played() -> void:
+func test_a_card_let_go_anywhere_on_your_side_is_played() -> void:
 	var lobby := _local_game(true, _player_1_starts())
 	var board: Control = await _board(lobby)
 	var table := _table(board)
@@ -244,11 +243,12 @@ func test_a_card_let_go_anywhere_on_your_field_is_played() -> void:
 	assert_true(table.in_field(BOTTOM, corner))
 	assert_false(table._can_drop_data(corner, {"card_id": card_id, "from": &"field"}), "only from a hand")
 	assert_false(table._can_drop_data(_field_point(table, TOP), dragged), "not onto the other side")
-	assert_false(table._can_drop_data(_pile_point(table, BOTTOM, &"deck"), dragged), "not onto the deck")
+	var far_corner := table.screen_point(Vector3(-table.half_width() + 0.2, 0, table.half_band() + 0.1))
+	assert_true(table.in_field(BOTTOM, far_corner), "the whole side takes cards, not only around the field")
+	assert_false(table.in_field(TOP, far_corner))
+	assert_true(table.in_field(BOTTOM, _pile_point(table, BOTTOM, &"deck")), "even beside the piles")
 	assert_true(table._can_drop_data(corner, dragged))
-	assert_true(table.is_field_lit(BOTTOM), "the field lights up")
 	table._drop_data(corner, dragged)
-	assert_false(table.is_field_lit(BOTTOM))
 	assert_eq(lobby.game_view["field"], [card_id])
 	assert_eq(lobby.game_view["time_ahead"], official[card_id].time_cost, "Player 1 spent the card's time")
 	assert_eq(table.cards_on(BOTTOM), [card_id] as Array[String], "and it lies on Player 1's field")
@@ -277,8 +277,8 @@ func test_cards_on_a_field_line_up_by_themselves() -> void:
 	assert_eq(first.z, table.card_center(BOTTOM, 2).z, "a few cards make one row")
 	var middle := (first.x + table.card_center(BOTTOM, 2).x) * 0.5
 	assert_almost_eq(middle, table.field_center(BOTTOM).x, 0.001, "in the middle of the field")
-	table.show_side(BOTTOM, cards.call(12), [], 0)
-	assert_lt(table.card_center(BOTTOM, 0).z, table.card_center(BOTTOM, 11).z, "more make a second row")
+	table.show_side(BOTTOM, cards.call(24), [], 0)
+	assert_lt(table.card_center(BOTTOM, 0).z, table.card_center(BOTTOM, 23).z, "more make a second row")
 	table.show_side(BOTTOM, cards.call(40), [], 0)
 	for i in 40:
 		var center := table.card_center(BOTTOM, i)
@@ -402,18 +402,16 @@ func test_the_table_fills_the_screen_whatever_its_size() -> void:
 		assert_gt(table.screen_point(mine - Vector3(0, 0, half.z)).y, band + TableView.MIDDLE_BAND * 0.5, "mine below it")
 
 
-func test_the_table_is_seen_at_a_slant() -> void:
+func test_the_table_is_seen_from_above_with_a_slight_slant() -> void:
 	var board: Control = await _board(_local_game(true, _player_1_starts()))
 	var table := _table(board)
 	var mine := table.field_center(BOTTOM)
 	var theirs := table.field_center(TOP)
 	var my_width := table.screen_point(mine + Vector3(1, 0, 0)).x - table.screen_point(mine).x
 	var their_width := table.screen_point(theirs + Vector3(1, 0, 0)).x - table.screen_point(theirs).x
-	assert_gt(my_width, their_width * 1.08, "the near side looks bigger than the far one")
+	assert_between(my_width / their_width, 1.02, 1.15, "the near side looks only a little bigger than the far one")
 	var my_depth := table.screen_point(mine + Vector3(0, 0, 1)).y - table.screen_point(mine).y
-	assert_lt(my_depth, my_width * 0.97, "and the table is foreshortened, so more fits up the screen")
-	var their_depth := table.screen_point(theirs + Vector3(0, 0, 1)).y - table.screen_point(theirs).y
-	assert_lt(their_depth, their_width * 0.85, "the far side more so")
+	assert_between(my_depth / my_width, 0.9, 1.05, "and the table is hardly foreshortened")
 
 ## The board in a viewport of its own, which takes mouse events as the game window does.
 func _board_in_window(lobby: Lobby) -> Array:
@@ -459,7 +457,7 @@ func test_the_sizes_are_those_of_mtg_arena() -> void:
 	var mine: float = across.call(table.field_center(BOTTOM))
 	var theirs: float = across.call(table.field_center(TOP))
 	assert_between(mine / width, 0.055, 0.075, "a card on my field is about 6.5% of the screen wide")
-	assert_between(theirs / mine, 0.75, 0.92, "the other side's a little smaller")
+	assert_between(theirs / mine, 0.85, 0.98, "the other side's a little smaller")
 	var half := Vector3(table.field_size().x * 0.5, 0, 0)
 	var field := table.screen_point(table.field_center(BOTTOM) + half).x - table.screen_point(table.field_center(BOTTOM) - half).x
 	assert_gt(field / width, 0.7, "my field is about three quarters of the screen across")
@@ -491,7 +489,7 @@ func test_a_spell_shrinks_from_where_it_was_let_go() -> void:
 	assert_lt(falling.scale.x, 1.0, "getting smaller")
 
 
-func test_the_deck_is_a_card_and_the_column_sits_in_the_middle_of_my_side() -> void:
+func test_the_deck_is_a_card_and_sits_at_the_outer_edge_of_its_side() -> void:
 	var board: Control = await _board(_local_game(true, _player_1_starts()))
 	var table := _table(board)
 	var across := func(at: Vector3) -> float:
@@ -502,9 +500,18 @@ func test_the_deck_is_a_card_and_the_column_sits_in_the_middle_of_my_side() -> v
 		across.call(deck), across.call(table.field_center(BOTTOM)), across.call(deck) * 0.15, "and looks it"
 	)
 	var grave := table.pile_center(BOTTOM, &"grave")
-	var column_top := grave.z - TableView.VORTEX * 0.5
-	var column_bottom := deck.z + TableView.PILE_CARD.y * 0.5
-	assert_almost_eq((column_top + column_bottom) * 0.5, table.field_center(BOTTOM).z, 0.01, "centred on my side")
+	var screen := board.get_viewport_rect().size
+	var deck_bottom := table.screen_point(deck + Vector3(0, 0, TableView.PILE_CARD.y * 0.5)).y
+	assert_almost_eq(screen.y - deck_bottom, TableView.BOTTOM_ROOM, 2.0, "my deck down where the hand's strip starts")
+	var their_deck := table.pile_center(TOP, &"deck")
+	var their_top := table.screen_point(their_deck - Vector3(0, 0, TableView.PILE_CARD.y * 0.5)).y
+	assert_almost_eq(their_top, screen.y - deck_bottom, 1.0, "theirs as far from the top")
+	var their_left := table.screen_point(their_deck - Vector3(TableView.PILE_CARD.x * 0.5, 0, 0)).x
+	var my_right := table.screen_point(deck + Vector3(TableView.PILE_CARD.x * 0.5, 0, 0)).x
+	assert_almost_eq(their_left, screen.x - my_right, 1.0, "and from the left as mine from the right")
+	var their_grave := table.pile_center(TOP, &"grave")
+	assert_eq(their_grave.x, their_deck.x, "their graveyard in the same column")
+	assert_gt(their_grave.z, their_deck.z, "toward the middle")
 	assert_lt(grave.z, deck.z, "the graveyard above the deck")
 	var field_right := table.field_center(BOTTOM).x + table.field_size().x * 0.5
 	assert_gt(deck.x - TableView.PILE_CARD.x * 0.5, field_right, "right of my field")

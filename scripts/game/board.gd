@@ -7,11 +7,11 @@ extends Control
 ## right; the opponent's side further away, turned around. Decks and graveyards are stacks as thick
 ## as the cards in them.
 ##
-## On the line between the two sides is a band with the back arrow and the opponent's name
-## at the left, the shared timer in the middle and the player's name at the right. The timer's
-## number is how much time the player who acts has, and its bar grows from the middle by that much
-## toward whoever has it: green to the right, toward the player's name, on their turn; red to the
-## left, toward the opponent's, on theirs (see TimeBar). Nothing else says whose turn it is.
+## On the line between the two sides is a band with the back arrow and the player's name (Player 1
+## in a local room) at the left, the shared timer in the middle and the opponent's name (Player 2)
+## at the right. The timer's number is how much time the player who acts has: green on the
+## player's turn, red on the opponent's; an arrow beside it points at the name of whoever's turn
+## it is.
 ##
 ## The hands are tucked away at the edges of the screen, the player's at the bottom and the
 ## opponent's at the top, face down: only a strip of each card shows until the mouse is over it,
@@ -42,9 +42,10 @@ const TOP := TableView.TOP
 ## Where cards dragged from each hand come from (CardThumb.source), as the fields know them.
 const HAND_SOURCE := &"hand"
 const TOP_HAND_SOURCE := &"top_hand"
-const GREEN := TimeBar.GREEN
-const RED := TimeBar.RED
+const GREEN := Color(0.3, 0.8, 0.42)
+const RED := Color(0.88, 0.3, 0.3)
 const MUTED := Color(0.62, 0.64, 0.74)
+const TurnArrow := preload("res://scripts/game/turn_arrow.gd")
 
 ## The connection to the room's host. The Online autoload, unless a test gives another.
 var online: Lobby = Online
@@ -63,9 +64,10 @@ var _grave_viewer: GraveViewer
 var _viewer_side := -1
 
 @onready var _time_label: Label = %TimeLabel
-@onready var _time_bar: TimeBar = %TimeBar
 @onready var _opponent_label: Label = %OpponentLabel
 @onready var _player_label: Label = %PlayerLabel
+@onready var _left_arrow: TurnArrow = %LeftTurnArrow
+@onready var _right_arrow: TurnArrow = %RightTurnArrow
 @onready var _table: TableView = %Table
 @onready var _band: Control = %MiddleBand
 @onready var _hand: HandView = %Hand
@@ -159,6 +161,8 @@ func _show() -> void:
 	var view := online.game_view
 	if view.is_empty():
 		_time_label.text = ""
+		_left_arrow.shown = false
+		_right_arrow.shown = false
 		_table.deck_enabled = [false, false]
 		_table.accepts_drops = [false, false]
 		return
@@ -170,13 +174,13 @@ func _show() -> void:
 
 	_time_label.text = str(absi(time_ahead))
 	_time_label.add_theme_color_override("font_color", GREEN if my_turn else RED)
-	# Alone, the player acts every time, however far ahead: the bar shows their time spent, green,
-	# toward their name, never red.
+	_time_label.tooltip_text = _standing(time_ahead)
+	# The arrow points at whoever's turn it is: the player at the left, the opponent at the right.
+	_left_arrow.color = GREEN
+	_right_arrow.color = RED
+	_left_arrow.shown = not over and my_turn
+	_right_arrow.shown = not over and not my_turn
 	var alone := not bool(view["opponent_seated"])
-	_time_bar.value = absi(time_ahead) if alone else -time_ahead
-	_time_bar.your_turn = my_turn
-	_time_bar.full_scale = int(view["draw_cost"]) * 2
-	_time_bar.tooltip_text = _standing(time_ahead)
 	_message_label.text = _message(view)
 	_message_label.visible = not _message_label.text.is_empty()
 
@@ -194,7 +198,7 @@ func _show() -> void:
 	# The hands.
 	_show_hand(view["hand"])
 	_player_label.text = _name_of(view, true) if online.controls_both else profile_name()
-	# Alone, the name is left out but its place kept, so the timer stays in the middle.
+	# Alone, the opponent's name is left out but its place kept, so the timer stays in the middle.
 	_opponent_label.text = _name_of(view, false) if two_players else ""
 	_top_hand.visible = two_players
 	if both:

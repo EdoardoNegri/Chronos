@@ -1,11 +1,12 @@
 class_name TableView
 extends Control
-## The table, seen at a slant from the player's chair (a small 3D scene in a SubViewport): the
-## player's side (BOTTOM) near and big, the other side (TOP) further away and smaller, as across a
-## real table. Each side has a field, a big box where its cards are played, and beside it a column
-## with its graveyard and, under it, its deck (the size of a card on the field), set in from the edge
-## of the screen and centred on the side: at the right of the player's field; the other side is the same turned around, its column at the left and its cards
-## facing the other way.
+## The table, seen from above with only a slight slant, as in MTG Arena (a small 3D scene in a
+## SubViewport): the player's side (BOTTOM) near, the other side (TOP) a little further away and a
+## little smaller. Each side has a field where its cards lie (no box is drawn: the whole side takes
+## cards) and beside it a column with its graveyard and, under it, its deck (the size of a card on
+## the field), set in from the edge of the screen and pushed to the outer edge of the side: the
+## player's at the bottom right, where the hand's strip starts; the other side is the same turned
+## around, its column at the top left and its cards facing the other way.
 ##
 ## The proportions are MTG Arena's: on a 16:9 screen a card on the player's field is about 6.5% of
 ## the screen wide, the other side's cards about 85% of that, and the player's field about three
@@ -21,7 +22,7 @@ extends Control
 ## the player's side, twice as deep, takes all the rest.
 ##
 ## Where a card lies on a field does not matter: the cards line up by themselves in the middle of the
-## box, in one row while they fit, then shared evenly between two rows, closer together as needed.
+## field, in one row while they fit, then shared evenly between two rows, closer together as needed.
 ##
 ## A deck is a stack as thick as the cards in it, so how full it is can be seen. A graveyard is a
 ## vortex (see vortex.gdshader): the cards in it cannot be seen. A card that goes into it starts from
@@ -30,10 +31,10 @@ extends Control
 ## gone. Hovering a deck or a graveyard shows how many cards it holds.
 ##
 ## The table only shows: what happens comes out as signals. Clicking a deck that is enabled emits
-## deck_pressed; clicking a graveyard emits grave_pressed (its cards are seen only that way). A card dragged from a hand (CardThumb.source as in hand_sources) can be dropped
-## anywhere on that hand's side's field while it accepts_drops; the field lights up, and dropping
-## emits card_dropped. Positions on screen are found by casting the mouse onto the table, so the
-## slant does not matter.
+## deck_pressed; clicking a graveyard emits grave_pressed (its cards are seen only that way). A card
+## dragged from a hand (CardThumb.source as in hand_sources) can be dropped anywhere on that hand's
+## side of the table while it accepts_drops; dropping emits card_dropped. Positions on screen are found by casting the mouse onto the table, so the slant does
+## not matter.
 
 signal deck_pressed(side: int)
 signal grave_pressed(side: int)
@@ -49,9 +50,9 @@ const TOP := 1
 ## field is FIELD_DEPTH deep (room for two rows of cards), twice that when playing alone.
 const CARD := Vector2(1.0, 1.4)
 const PILE_CARD := CARD
-const FIELD_DEPTH := 3.9
+const FIELD_DEPTH := 3.4
 ## How the camera looks at the table: down at PITCH degrees, seeing FOV degrees from top to bottom.
-const PITCH := 60.0
+const PITCH := 80.0
 const FOV := 30.0
 ## The band across the middle of the screen, and the room left for the hands: above the other side
 ## and under the player's, in pixels.
@@ -64,8 +65,8 @@ const EDGE := 0.15
 const MARGIN := 0.18
 const CARD_GAP := 0.16
 const PILE_GAP := 0.25
-## How far the column of the deck and graveyard is set in from the edge of the screen, and from the
-## field.
+## How far the column of the deck and graveyard is set in from the edge of the screen (the player's;
+## the other side's as far from its corner on screen), and from the field.
 const PILE_INSET := 0.5
 const FIELD_TO_PILES := 0.45
 ## How wide the graveyard's vortex is (as a card), and how long a card takes to go into it (seconds).
@@ -74,13 +75,9 @@ const VORTEX_SECONDS := 0.7
 const VORTEX_SHADER := preload("res://assets/shaders/vortex.gdshader")
 ## How thick one card is in a stack: thicker than a real one, so a stack shows how full it is.
 const CARD_THICKNESS := 0.015
-const BORDER := 0.05
 const TABLE_SIZE := Vector2(60.0, 40.0)
 
 const TABLE_COLOR := Color(0.06, 0.07, 0.13, 0.92)
-const FIELD_COLOR := Color(0.55, 0.58, 0.72, 0.08)
-const FIELD_EDGE := Color(0.55, 0.58, 0.72, 0.6)
-const DROP_COLOR := Color(0.3, 0.8, 0.42, 1.0)
 const SLOT_COLOR := Color(0.55, 0.58, 0.72, 0.45)
 ## The sides of a stack of cards: black, as the cards' own borders are (see CardView).
 const EDGE_COLOR := Color(0.0, 0.0, 0.0)
@@ -101,7 +98,7 @@ var top_visible := true:
 		if value == top_visible:
 			return
 		top_visible = value
-		for node: Node3D in [_sides[TOP], _fields[TOP], _vortices[TOP]]:
+		for node: Node3D in [_sides[TOP], _vortices[TOP]]:
 			node.visible = value
 		_relayout()
 
@@ -111,22 +108,23 @@ var _screen := Vector2(1152, 648)
 ## table reaches to each side, in table units.
 var _half_gap := 0.4
 var _half_width := 7.0
-## How far the table reaches to each side where the piles are (further away, so further across).
+## How far the table reaches to each side where the player's piles are.
 var _pile_half_width := 7.0
+## Where the other side's deck is, mirrored onto the player's side (see pile_center): found so that
+## it is as far from the top left corner of the screen as the player's is from the bottom right.
+var _top_deck := Vector3(7.0, 0.0, 3.5)
 var _viewport: SubViewport
 var _camera: Camera3D
 var _back_texture: Texture2D
 var _slot_texture: Texture2D
 var _badge: Label
-## Per side: the Node3D holding its cards and piles, and the one holding its field's box.
+## Per side: the Node3D holding its cards and piles.
 var _sides: Array[Node3D] = []
-var _fields: Array[Node3D] = []
 var _cards: Array = [[], []]
 var _deck_counts: Array[int] = [0, 0]
 var _graves: Array = [[], []]
-## What the mouse is over: [kind (&"deck", &"grave" or &""), side], and the fields lit for a drop.
+## What the mouse is over: [kind (&"deck", &"grave" or &""), side].
 var _hovered: Array = [&"", 0]
-var _lit: Array[bool] = [false, false]
 ## Each side's vortex (kept across show_side, so it keeps turning), whether the side was shown
 ## before (cards already in a graveyard when the board opens do not fall again), and the cards
 ## going down into a vortex right now.
@@ -158,9 +156,6 @@ func _init() -> void:
 	_slot_texture = _make_slot_texture()
 	_build_world()
 	for side in 2:
-		var field := _build_field(side)
-		_viewport.add_child(field)
-		_fields.append(field)
 		var holder := Node3D.new()
 		_viewport.add_child(holder)
 		_sides.append(holder)
@@ -206,7 +201,6 @@ func show_side(side: int, field: Array, grave: Array, deck_count: int) -> void:
 			from = _dropped_at[side]
 			_dropped_id[side] = ""
 		_fall_into_vortex(side, entry, from)
-	_light(-1)
 	_update_badge()
 
 
@@ -234,11 +228,6 @@ func is_count_shown() -> bool:
 ## How many cards are going down into a vortex right now.
 func falling_count() -> int:
 	return _falling
-
-
-## Whether a side's field is lit, for a card dragged over it.
-func is_field_lit(side: int) -> bool:
-	return _lit[side]
 
 
 # --- Where things are ----------------------------------------------------------------------
@@ -310,12 +299,16 @@ func card_center(side: int, index: int) -> Vector3:
 
 
 ## The middle of a side's graveyard (&"grave") or deck (&"deck") on the table: in a column beside
-## the field, centred on the side, the graveyard above the deck (toward the middle of the table).
+## the field, the deck at the outer edge of the side (for the player, where the hand's strip starts)
+## and the graveyard just inside it (toward the middle of the table). The other side's are as far
+## from their corner of the screen (top left) as the player's are from theirs (bottom right).
 func pile_center(side: int, kind: StringName) -> Vector3:
-	var column := VORTEX + PILE_GAP + PILE_CARD.y
-	var top := half_band() + side_depth() * 0.5 - column * 0.5
-	var z := top + VORTEX * 0.5 if kind == &"grave" else top + VORTEX + PILE_GAP + PILE_CARD.y * 0.5
-	var at := Vector3(_pile_x(), 0.0, z)
+	var deck := Vector3(_pile_x(), 0.0, half_band() + side_depth() - PILE_CARD.y * 0.5)
+	if side == TOP:
+		deck = _top_deck
+	var at := deck
+	if kind == &"grave":
+		at.z -= PILE_CARD.y * 0.5 + PILE_GAP + VORTEX * 0.5
 	return -at if side == TOP else at
 
 
@@ -331,10 +324,13 @@ func table_point(at: Vector2) -> Variant:
 	return Plane(Vector3.UP, 0.0).intersects_ray(origin, direction)
 
 
-## Whether a point of the screen is on a side's field.
+## Whether a point of the screen is on a side of the table (its half; alone, the whole table).
 func in_field(side: int, at: Vector2) -> bool:
 	var point: Variant = table_point(at)
-	return point != null and _covers(field_center(side), field_size(), point)
+	if point == null:
+		return false
+	var z: float = (point as Vector3).z
+	return z >= 0.0 if side == BOTTOM else z <= 0.0
 
 
 ## The pile under a point of the screen: [&"deck" or &"grave", side], or [&"", 0].
@@ -378,14 +374,11 @@ func _gui_input(event: InputEvent) -> void:
 
 func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 	var side := _side_for(data)
-	var ok := side != -1 and in_field(side, at_position)
-	_light(side if ok else -1)
-	return ok
+	return side != -1 and in_field(side, at_position)
 
 
 func _drop_data(at_position: Vector2, data: Variant) -> void:
 	var side := _side_for(data)
-	_light(-1)
 	var point: Variant = table_point(at_position)
 	_dropped_id[side] = str(data["card_id"])
 	_dropped_at[side] = point if point != null else field_center(side)
@@ -400,14 +393,8 @@ func _side_for(data: Variant) -> int:
 	return side if side != -1 and accepts_drops[side] else -1
 
 
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_DRAG_END:
-		_light(-1)
-
-
 func _on_mouse_exited() -> void:
 	_set_hovered([&"", 0])
-	_light(-1)
 
 
 func _set_hovered(pile: Array) -> void:
@@ -435,22 +422,6 @@ func _update_badge() -> void:
 	if kind == &"deck":
 		top.y = count * CARD_THICKNESS
 	_badge.position = screen_point(top) - _badge.size * 0.5
-
-
-## Lights one side's field for a drop, or none (-1).
-func _light(side: int) -> void:
-	for each in 2:
-		var lit := each == side
-		if _lit[each] == lit:
-			continue
-		_lit[each] = lit
-		for part: MeshInstance3D in _fields[each].get_children():
-			var material := part.material_override as StandardMaterial3D
-			var is_fill: bool = part.get_meta(&"fill", false)
-			if is_fill:
-				material.albedo_color = Color(DROP_COLOR, 0.14) if lit else FIELD_COLOR
-			else:
-				material.albedo_color = DROP_COLOR if lit else FIELD_EDGE
 
 
 # --- Building the 3D scene -----------------------------------------------------------------
@@ -483,6 +454,17 @@ func _fit_camera() -> void:
 	_fit_distance()
 	_half_width = _reach_at(_screen.y - BOTTOM_ROOM)
 	_pile_half_width = _reach_at(screen_point(pile_center(BOTTOM, &"deck")).y)
+	# The other side's deck: its outer corner as far from the top left of the screen as the player's
+	# is from the bottom right.
+	var my_deck := pile_center(BOTTOM, &"deck")
+	var gap := Vector2(
+		_screen.x - screen_point(my_deck + Vector3(PILE_CARD.x * 0.5, 0.0, 0.0)).x,
+		_screen.y - screen_point(my_deck + Vector3(0.0, 0.0, PILE_CARD.y * 0.5)).y
+	)
+	var far_edge: Vector3 = table_point(Vector2(_screen.x * 0.5, gap.y))
+	var deck_z := far_edge.z + PILE_CARD.y * 0.5
+	var left_edge: Vector3 = table_point(Vector2(gap.x, screen_point(Vector3(0.0, 0.0, deck_z)).y))
+	_top_deck = -Vector3(left_edge.x + PILE_CARD.x * 0.5, 0.0, deck_z)
 
 
 ## How far the table reaches to the right edge of the screen, at a height on the screen.
@@ -538,35 +520,8 @@ func _relayout() -> void:
 	_viewport.size = Vector2i(_screen)
 	_fit_camera()
 	for side in 2:
-		var old := _fields[side]
-		_fields[side] = _build_field(side)
-		_fields[side].visible = old.visible
-		_viewport.add_child(_fields[side])
-		old.queue_free()
-		_lit[side] = false
 		show_side(side, _cards[side], _graves[side], _deck_counts[side])
 	laid_out.emit()
-
-
-## A side's field: a faint box with a clear edge.
-func _build_field(side: int) -> Node3D:
-	var field := Node3D.new()
-	field.position = field_center(side)
-	var area := field_size()
-	var fill := _flat(area, _material(null, FIELD_COLOR, true))
-	fill.set_meta(&"fill", true)
-	field.add_child(fill)
-	var half := area * 0.5
-	for edge: Array in [
-		[Vector2(area.x, BORDER), Vector3(0, 0, -half.y)],
-		[Vector2(area.x, BORDER), Vector3(0, 0, half.y)],
-		[Vector2(BORDER, area.y), Vector3(-half.x, 0, 0)],
-		[Vector2(BORDER, area.y), Vector3(half.x, 0, 0)],
-	]:
-		var line := _flat(edge[0], _material(null, FIELD_EDGE, true))
-		line.position = edge[1] + Vector3(0, 0.003, 0)
-		field.add_child(line)
-	return field
 
 
 ## A flat rectangle lying on the table, `area` wide and deep.

@@ -2,10 +2,10 @@
 
 [ext_resource type="Script" path="res://scripts/game/board.gd" id="1_board"]
 [ext_resource type="Theme" path="res://assets/themes/menu_theme.tres" id="3_theme"]
-[ext_resource type="Script" path="res://scripts/game/time_bar.gd" id="4_bar"]
 [ext_resource type="Script" path="res://scripts/game/table_view.gd" id="5_table"]
 [ext_resource type="Script" path="res://scripts/game/hand_view.gd" id="6_hand"]
 [ext_resource type="Script" path="res://scripts/ui/back_arrow.gd" id="9_back"]
+[ext_resource type="Script" path="res://scripts/game/turn_arrow.gd" id="10_arrow"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_band"]
 bg_color = Color(0.03, 0.035, 0.07, 0.92)
@@ -95,40 +95,45 @@ layout_mode = 2
 tooltip_text = "Leave the game"
 script = ExtResource("9_back")
 
+[node name="PlayerLabel" type="Label" parent="MiddleBand/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
+text_overrun_behavior = 3
+
+[node name="Timer" type="HBoxContainer" parent="MiddleBand/Row"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="LeftTurnArrow" type="Control" parent="MiddleBand/Row/Timer"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("10_arrow")
+
+[node name="TimeLabel" type="Label" parent="MiddleBand/Row/Timer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+mouse_filter = 1
+text = "0"
+horizontal_alignment = 1
+
+[node name="RightTurnArrow" type="Control" parent="MiddleBand/Row/Timer"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("10_arrow")
+points_left = false
+
 [node name="OpponentLabel" type="Label" parent="MiddleBand/Row"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.78, 0.8, 0.9, 1)
-text_overrun_behavior = 3
-
-[node name="TimeLabel" type="Label" parent="MiddleBand/Row"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(64, 0)
-layout_mode = 2
-theme_override_font_sizes/font_size = 28
-text = "0"
-horizontal_alignment = 2
-
-[node name="TimeBar" type="Control" parent="MiddleBand/Row"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(420, 20)
-layout_mode = 2
-size_flags_vertical = 4
-mouse_filter = 1
-script = ExtResource("4_bar")
-
-[node name="BarBalance" type="Control" parent="MiddleBand/Row"]
-custom_minimum_size = Vector2(64, 0)
-layout_mode = 2
-mouse_filter = 2
-
-[node name="PlayerLabel" type="Label" parent="MiddleBand/Row"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_stretch_ratio = 1.0
-theme_override_colors/font_color = Color(0.95, 0.8, 0.45, 1)
 horizontal_alignment = 2
 text_overrun_behavior = 3
 
